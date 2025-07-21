@@ -171,6 +171,19 @@ export default function Home() {
   allItems.sort((a, b) => b.timestamp - a.timestamp)
   const displayItems = allItems.slice(0, 50)
 
+  const getRelativeTime = (timestamp) => {
+    const now = Date.now()
+    const diff = now - timestamp
+    const minutes = Math.floor(diff / 60000)
+    const hours = Math.floor(diff / 3600000)
+    const days = Math.floor(diff / 86400000)
+    
+    if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`
+    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`
+    if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`
+    return 'just now'
+  }
+
   return (
     <div className="min-h-screen bg-black text-white">
       <Head>
@@ -210,7 +223,7 @@ export default function Home() {
                 {displayItems.map((item, i) => (
                   <tr key={i} className="border-b border-gray-900 hover:bg-gray-900/50">
                     <td className="py-4">
-                      <span className={`px-2 py-1 text-base font ${item.type === 'block' ? 'text-fuchsia-200 bg-fuchsia-900/50' : 'text-green-200 bg-green-900/50'}`}>
+                      <span className={`px-2 py-1 text-base font-bold ${item.type === 'block' ? 'text-fuchsia-200 bg-fuchsia-900/50' : 'text-green-200 bg-green-900/50'}`}>
                         {item.type === 'block' ? '-' : 'transfer'}
                       </span>
                     </td>
@@ -221,7 +234,7 @@ export default function Home() {
                       {item.timestamp ? new Date(item.timestamp).toLocaleString() : '-'}
                     </td>
                     <td className="py-4 font-mono text-base">
-                      <a href={`/${item.type === 'block' ? 'blocks' : 'transactions'}?hash=${item.hash}`} className="text-blue-300 hover:text-blue-200 hover:underline">
+                      <a href={`/${item.type === 'block' ? 'address' : 'trx'}?hash=${item.hash}`} className="text-blue-300 hover:text-blue-200 hover:underline">
                         {item.hash?.substring(0, 8)}...{item.hash?.substring(item.hash.length - 4)}
                       </a>
                     </td>
@@ -235,14 +248,14 @@ export default function Home() {
                     </td>
                     <td className="py-4 font-mono text-base">
                       {item.type === 'transaction' && item.to ? (
-                        <a href={`/contract?address=${item.to}`} className="text-blue-300 hover:text-blue-200 hover:underline flex items-center gap-2">
+                        <a href={`/address?address=${item.to}`} className="text-blue-300 hover:text-blue-200 hover:underline flex items-center gap-2">
                           <AddressIcon address={item.to} size={20} />
                           {item.to.substring(0, 8)}...{item.to.substring(item.to.length - 4)}
                         </a>
                       ) : '-'}
                     </td>
                     <td className="py-4 text-base text-gray-500">
-                      {item.timestamp ? 'just now' : '-'}
+                      {item.timestamp ? getRelativeTime(item.timestamp) : '-'}
                     </td>
                   </tr>
                 ))}
