@@ -1,0 +1,31 @@
+{
+  "name": "exploder",
+  "version": "1.0.0",
+  "description": "Self-hosted Ethereum block scanner for local development",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^14.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5"
+  },
+  "keywords": [
+    "ethereum",
+    "block-scanner",
+    "local-development",
+    "hardhat",
+    "anvil"
+  ],
+  "author": "",
+  "license": "MIT"
+} 
