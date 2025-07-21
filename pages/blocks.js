@@ -39,7 +39,7 @@ export default function Blocks() {
   }, [rpcUrl])
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-black text-white">
       <Head>
         <title>Blocks - Exploder</title>
         <meta name="description" content="View Ethereum blocks" />
@@ -48,15 +48,15 @@ export default function Blocks() {
       <main className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold">Blocks</h1>
-          <Link href="/" className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors">
+          <Link href="/" className="bg-gray-900 hover:bg-gray-800 text-white font-bold py-2 px-4 transition-colors">
             Home
           </Link>
         </div>
         
-        <div className="bg-gray-800 rounded-lg p-6">
+        <div className="bg-black p-6 border border-gray-900">
           <div className="space-y-4">
             {blocks.map((block, i) => (
-              <div key={i} className="border border-gray-600 p-4 rounded">
+              <div key={i} className="border border-gray-900 p-4">
                 <div>Block: {parseInt(block.number, 16)}</div>
                 <div>Hash: {block.hash}</div>
                 <div>Transactions: {block.transactions?.length || 0}</div>
