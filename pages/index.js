@@ -346,13 +346,13 @@ export default function Home() {
                   <tr key={i} className="border-b border-gray-900 hover:bg-gray-900/50">
                     <td className="py-4">
                       {item.type === 'block' ? (
-                        <span className="px-2 py-1 text-base font-bold text-fuchsia-200 bg-fuchsia-900/50">
+                        <span className="px-2 py-1 text-base font-bold text-indigo-200 bg-indigo-900/50">
                           -
                         </span>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <Check className="w-4 h-4 text-green-500" />
-                          <span className="text-base font-bold text-green-200 bg-green-900/50 px-2 py-1">
+                          <Check className="w-4 h-4 text-emerald-500" />
+                          <span className="text-base font-bold text-emerald-200 bg-emerald-900/50 px-2 py-1">
                             transfer
                           </span>
                         </div>
