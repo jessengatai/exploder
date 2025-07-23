@@ -1,6 +1,5 @@
 import Head from 'next/head'
-import { useState, useEffect } from 'react'
-import { detectChainFromUrl } from '../utils/chainDetector'
+import { useState, useEffect, useRef } from 'react'
 import AddressIcon from '../components/AddressIcon'
 import { Check, ExternalLink, Square, ArrowLeftRight, Box, X } from 'lucide-react'
 import Card from '../components/ui/Card'
@@ -8,25 +7,25 @@ import TimeAgo from '../components/ui/TimeAgo'
 import TextLink from '../components/ui/TextLink'
 import ListBlocks from '../components/Lists/ListBlocks'
 import ListTransactions from '../components/Lists/ListTransactions'
+import { getTransactionFailureReason } from '../utils/nodeDetector'
 
 export default function Home() {
   const [blocks, setBlocks] = useState([])
   const [transactions, setTransactions] = useState([])
   const [rpcUrl, setRpcUrl] = useState('http://localhost:8545')
-  const [chainInfo, setChainInfo] = useState(null)
   const [transactionDetails, setTransactionDetails] = useState({})
   const [transactionStatuses, setTransactionStatuses] = useState({})
+  const [transactionFailures, setTransactionFailures] = useState({})
+  const checkedTransactions = useRef(new Set())
 
   useEffect(() => {
     fetch('/config.json')
       .then(res => res.json())
       .then(config => {
         setRpcUrl(config.rpcUrl)
-        setChainInfo(detectChainFromUrl(config.rpcUrl))
       })
       .catch(() => {
         setRpcUrl('http://localhost:8545')
-        setChainInfo(detectChainFromUrl('http://localhost:8545'))
       })
       .then(() => {
         // Fetch recent blocks and transactions
@@ -83,8 +82,8 @@ export default function Home() {
         }
         setTransactions(allTransactions.slice(0, 20))
         
-        // Check transaction statuses
-        allTransactions.slice(0, 20).forEach(tx => {
+        // Check transaction statuses (only for recent transactions)
+        allTransactions.slice(0, 5).forEach(tx => {
           if (tx.hash) {
             checkTransactionStatus(tx.hash)
           }
@@ -142,11 +141,11 @@ export default function Home() {
               return updated
             })
             
-            // Check status for all transactions in this block
+            // Check status for transactions in this block (only if we have them)
             block.transactions.forEach(tx => {
-              if (tx.hash) {
-                // Immediate status check for mined transactions
-                setTimeout(() => checkTransactionStatus(tx.hash), 500)
+              if (tx.hash && transactions.find(t => t.hash === tx.hash)) {
+                // Only check status for transactions we're already tracking
+                setTimeout(() => checkTransactionStatus(tx.hash), 1000)
               }
             })
           }
@@ -177,8 +176,10 @@ export default function Home() {
                 return prev
               })
               
-              // Check transaction status
-              checkTransactionStatus(tx.hash)
+              // Check transaction status (only for pending transactions we care about)
+              if (transactions.length < 10) {
+                checkTransactionStatus(tx.hash)
+              }
             }
           })
           .catch(error => {
@@ -231,14 +232,7 @@ export default function Home() {
   allItems.sort((a, b) => b.timestamp - a.timestamp)
   const displayItems = allItems.slice(0, 50)
   
-  // Check status for all displayed transactions
-  useEffect(() => {
-    displayItems.forEach(item => {
-      if (item.type === 'transaction' && item.hash && !transactionStatuses[item.hash]) {
-        checkTransactionStatus(item.hash)
-      }
-    })
-  }, [displayItems, transactionStatuses])
+
 
 
 
@@ -371,6 +365,17 @@ export default function Home() {
           ...prev,
           [txHash]: status
         }))
+        
+        // If transaction failed, get failure reason
+        if (status === 'failed') {
+          const failureReason = await getTransactionFailureReason(rpcUrl, txHash)
+          if (failureReason) {
+            setTransactionFailures(prev => ({
+              ...prev,
+              [txHash]: failureReason
+            }))
+          }
+        }
       } else {
         // Retry after 2 seconds for transactions without receipts
         setTimeout(() => checkTransactionStatus(txHash), 2000)

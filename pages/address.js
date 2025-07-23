@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { Wallet, ExternalLink, Hash, Calendar, Activity, Coins } from 'lucide-react'
 import AddressIcon from '../components/AddressIcon'
-import { detectChainFromUrl } from '../utils/chainDetector'
+
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import ContractCode from '../components/ui/ContractCode'
@@ -21,7 +21,6 @@ export default function Address() {
   const [tokens, setTokens] = useState([])
   const [tokenBalances, setTokenBalances] = useState([])
   const [contractInfo, setContractInfo] = useState(null)
-  const [chainInfo, setChainInfo] = useState(null)
 
   useEffect(() => {
     if (!actualAddress) return
@@ -30,20 +29,16 @@ export default function Address() {
       .then(res => res.json())
       .then(config => {
         setRpcUrl(config.rpcUrl)
-        const detectedChain = detectChainFromUrl(config.rpcUrl)
-        setChainInfo(detectedChain)
-        fetchAddressData(actualAddress, config.rpcUrl, detectedChain)
+        fetchAddressData(actualAddress, config.rpcUrl)
       })
       .catch(() => {
         const defaultUrl = 'http://localhost:8545'
         setRpcUrl(defaultUrl)
-        const detectedChain = detectChainFromUrl(defaultUrl)
-        setChainInfo(detectedChain)
-        fetchAddressData(actualAddress, defaultUrl, detectedChain)
+        fetchAddressData(actualAddress, defaultUrl)
       })
   }, [actualAddress])
 
-  const fetchAddressData = async (addr, url, chain) => {
+  const fetchAddressData = async (addr, url) => {
     try {
       // Get ETH balance
       const balanceRes = await fetch(url, {
@@ -494,7 +489,7 @@ export default function Address() {
               <Card className="mt-8">
                 <ContractCode 
                   contractInfo={contractInfo} 
-                  explorerUrl={getExplorerContractUrl(actualAddress, chainInfo)}
+                  explorerUrl={null}
                 />
               </Card>
             )}

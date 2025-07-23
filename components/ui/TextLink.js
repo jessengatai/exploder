@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 export default function TextLink({ href, children, className = '', external = false, ...props }) {
-  const baseClasses = 'text-emerald-400 hover:text-emerald-200 hover:underline'
+  const baseClasses = 'text-indigo-300 hover:text-indigo-200 hover:underline'
   
   if (external) {
     return (

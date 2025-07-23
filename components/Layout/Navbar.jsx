@@ -1,23 +1,29 @@
 import { Search } from 'lucide-react'
 
-export default function Navbar({ chainInfo }) {
+export default function Navbar({ nodeInfo }) {
   return (
     <nav className="bg-black border-b border-gray-900 px-6 py-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-6">
           {/* Logo and Title */}
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-white">Exploder</h1>
+            <h1 className="text-2xl font-mono text-white">EXPLODER</h1>
             <div className="text-sm text-gray-400">
               Self-hosted Ethereum block scanner
             </div>
           </div>
           
-          {/* Chain Info */}
-          {chainInfo && (
+          {/* Node Info */}
+          {nodeInfo && (
             <div className="text-sm text-gray-400">
-              Connected to: <span className="text-blue-300">{chainInfo.name}</span>
-              {chainInfo.chainId && ` (Chain ID: ${chainInfo.chainId})`}
+              {nodeInfo.forkInfo ? (
+                <span>Forking <span className="text-blue-300">{nodeInfo.forkInfo}</span></span>
+              ) : (
+                <span>Local Network</span>
+              )}
+              {nodeInfo.latestBlock > 0 && (
+                <span className="ml-2">• Block #{nodeInfo.latestBlock.toLocaleString()}</span>
+              )}
             </div>
           )}
         </div>

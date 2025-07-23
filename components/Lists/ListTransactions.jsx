@@ -2,6 +2,7 @@ import { ArrowLeftRight, X } from 'lucide-react'
 import TimeAgo from '../ui/TimeAgo'
 import TextLink from '../ui/TextLink'
 import DisplayAddress from '../ui/DisplayAddress'
+import DisplayHash from '../ui/DisplayHash'
 
 export default function ListTransactions({ transactions, transactionStatuses, transactionDetails }) {
   return (
@@ -15,8 +16,10 @@ export default function ListTransactions({ transactions, transactionStatuses, tr
               ) : (
                 <ArrowLeftRight className="w-4 h-4 text-emerald-500" />
               )}
-              <span className="font-mono">
-                {tx.hash?.substring(0, 6)}...{tx.hash?.substring(tx.hash.length - 4)}
+              <span className="">
+              <TextLink href={`/trx?hash=${tx.hash}`}>
+                <DisplayHash hash={tx.hash} />  
+              </TextLink>
               </span>
             </div>
             <div className="text-slate-600">
@@ -26,15 +29,11 @@ export default function ListTransactions({ transactions, transactionStatuses, tr
           <div className="space-y-1">
             <div className="flex justify-between">
               <span className="text-slate-600">From:</span>
-              <TextLink href={`/address?hash=${tx.from}`} className="">
-                <DisplayAddress address={tx.from} />
-              </TextLink>
+              <DisplayAddress address={tx.from} />
             </div>
             <div className="flex justify-between">
               <span className="text-slate-600">To:</span>
-              <TextLink href={`/address?hash=${tx.to}`} className="">
-                <DisplayAddress address={tx.to} />
-              </TextLink>
+              <DisplayAddress address={tx.to} />
             </div>
             <div className="flex justify-between">
               <span className="text-slate-600">Value:</span>
@@ -55,6 +54,7 @@ export default function ListTransactions({ transactions, transactionStatuses, tr
                 }
               </span>
             </div>
+
           </div>
         </div>
       ))}
