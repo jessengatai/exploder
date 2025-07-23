@@ -2,11 +2,12 @@ import Head from 'next/head'
 import { useState, useEffect } from 'react'
 import { detectChainFromUrl } from '../utils/chainDetector'
 import AddressIcon from '../components/AddressIcon'
-import { Check, ExternalLink } from 'lucide-react'
+import { Check, ExternalLink, Square, ArrowLeftRight, Box, X } from 'lucide-react'
 import Card from '../components/ui/Card'
-import AddressDisplay from '../components/ui/Address'
 import TimeAgo from '../components/ui/TimeAgo'
 import TextLink from '../components/ui/TextLink'
+import ListBlocks from '../components/Lists/ListBlocks'
+import ListTransactions from '../components/Lists/ListTransactions'
 
 export default function Home() {
   const [blocks, setBlocks] = useState([])
@@ -14,6 +15,7 @@ export default function Home() {
   const [rpcUrl, setRpcUrl] = useState('http://localhost:8545')
   const [chainInfo, setChainInfo] = useState(null)
   const [transactionDetails, setTransactionDetails] = useState({})
+  const [transactionStatuses, setTransactionStatuses] = useState({})
 
   useEffect(() => {
     fetch('/config.json')
@@ -81,8 +83,15 @@ export default function Home() {
         }
         setTransactions(allTransactions.slice(0, 20))
         
+        // Check transaction statuses
+        allTransactions.slice(0, 20).forEach(tx => {
+          if (tx.hash) {
+            checkTransactionStatus(tx.hash)
+          }
+        })
+        
         // Analyze transactions for values and token transfers
-        analyzeTransactions(allTransactions.slice(0, 20), url)
+        analyzeTransactions(allTransactions.slice(0, 20), rpcUrl)
       } catch (error) {
         console.error('Error fetching recent data:', error)
       }
@@ -114,6 +123,33 @@ export default function Home() {
         if (data.params.subscription) {
           const block = data.params.result
           setBlocks(prev => [block, ...prev.slice(0, 9)])
+          
+          // Update transaction details when block is mined
+          if (block.transactions && block.transactions.length > 0) {
+            setTransactions(prev => {
+              const updated = [...prev]
+              block.transactions.forEach(blockTx => {
+                const existingIndex = updated.findIndex(tx => tx.hash === blockTx.hash)
+                if (existingIndex !== -1) {
+                  // Update with full transaction details from block
+                  updated[existingIndex] = {
+                    ...updated[existingIndex],
+                    ...blockTx,
+                    blockNumber: parseInt(block.number, 16)
+                  }
+                }
+              })
+              return updated
+            })
+            
+            // Check status for all transactions in this block
+            block.transactions.forEach(tx => {
+              if (tx.hash) {
+                // Immediate status check for mined transactions
+                setTimeout(() => checkTransactionStatus(tx.hash), 500)
+              }
+            })
+          }
         } else if (data.params.result) {
           const txHash = data.params.result
           // Get full transaction details
@@ -130,17 +166,19 @@ export default function Home() {
           .then(res => res.json())
           .then(result => {
             if (result.result && result.result.hash) {
-              // Validate transaction data before adding
               const tx = result.result
-              if (tx.from && tx.to && tx.value !== undefined) {
-                setTransactions(prev => {
-                  // Don't add if already exists
-                  if (!prev.find(t => t.hash === tx.hash)) {
-                    return [tx, ...prev.slice(0, 9)]
-                  }
-                  return prev
-                })
-              }
+              // Add transaction even if some fields are missing initially
+              // They will be populated when the transaction is mined
+              setTransactions(prev => {
+                // Don't add if already exists
+                if (!prev.find(t => t.hash === tx.hash)) {
+                  return [tx, ...prev.slice(0, 9)]
+                }
+                return prev
+              })
+              
+              // Check transaction status
+              checkTransactionStatus(tx.hash)
             }
           })
           .catch(error => {
@@ -192,6 +230,15 @@ export default function Home() {
   // Sort by timestamp (newest first)
   allItems.sort((a, b) => b.timestamp - a.timestamp)
   const displayItems = allItems.slice(0, 50)
+  
+  // Check status for all displayed transactions
+  useEffect(() => {
+    displayItems.forEach(item => {
+      if (item.type === 'transaction' && item.hash && !transactionStatuses[item.hash]) {
+        checkTransactionStatus(item.hash)
+      }
+    })
+  }, [displayItems, transactionStatuses])
 
 
 
@@ -305,107 +352,69 @@ export default function Home() {
     }
   }
 
+  const checkTransactionStatus = async (txHash) => {
+    try {
+      const response = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'eth_getTransactionReceipt',
+          params: [txHash]
+        })
+      })
+      const result = await response.json()
+      if (result.result) {
+        const status = result.result.status === '0x1' ? 'success' : 'failed'
+        setTransactionStatuses(prev => ({
+          ...prev,
+          [txHash]: status
+        }))
+      } else {
+        // Retry after 2 seconds for transactions without receipts
+        setTimeout(() => checkTransactionStatus(txHash), 2000)
+      }
+    } catch (error) {
+      console.error('Error checking transaction status:', error)
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-black text-white">
+    <>
       <Head>
         <title>Exploder - Ethereum Block Scanner</title>
         <meta name="description" content="Self-hosted Ethereum block scanner for local development" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4">Exploder</h1>
-          <p className="text-xl text-gray-300 mb-2">Self-hosted Ethereum block scanner for local development</p>
-          {chainInfo && (
-            <div className="text-base text-gray-400">
-              Connected to: <span className="text-blue-300">{chainInfo.name}</span>
-              {chainInfo.chainId && ` (Chain ID: ${chainInfo.chainId})`}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Blocks Card */}
+          <Card>
+            <h2 className="text-xl font-bold mb-4">Recent Blocks</h2>
+            <ListBlocks blocks={displayItems.filter(item => item.type === 'block').slice(0, 10)} />
+          </Card>
+
+          {/* Transactions Card */}
+          <Card>
+            <h2 className="text-xl font-bold mb-4">Recent Transactions</h2>
+            <ListTransactions 
+              transactions={displayItems.filter(item => item.type === 'transaction').slice(0, 10)}
+              transactionStatuses={transactionStatuses}
+              transactionDetails={transactionDetails}
+            />
+          </Card>
+
+          {/* Contracts Card */}
+          <Card>
+            <h2 className="text-xl font-bold mb-4">Recent Contracts</h2>
+            <div className="space-y-3">
+              <div className="text-center py-8 text-gray-400">
+                Contract activity coming soon...
+              </div>
             </div>
-          )}
+          </Card>
         </div>
-        
-        <Card>
-          <h2 className="text-2xl font-bold mb-6">Recent Activity</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-base">
-              <thead>
-                <tr className="border-b border-gray-900">
-                  <th className="text-left py-2">Function</th>
-                  <th className="text-left py-2">Block</th>
-                  <th className="text-left py-2">Block timestamp</th>
-                  <th className="text-left py-2">Hash</th>
-                  <th className="text-left py-2">From</th>
-                  <th className="text-left py-2">To</th>
-                  <th className="text-left py-2">Value</th>
-                  <th className="text-left py-2">When</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayItems.map((item, i) => (
-                  <tr key={i} className="border-b border-gray-900 hover:bg-gray-900/50">
-                    <td className="py-4">
-                      {item.type === 'block' ? (
-                        <span className="px-2 py-1 text-base font-bold text-indigo-200 bg-indigo-900/50">
-                          -
-                        </span>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <Check className="w-4 h-4 text-emerald-500" />
-                          <span className="text-base font-bold text-emerald-200 bg-emerald-900/50 px-2 py-1">
-                            transfer
-                          </span>
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-4">
-                      {item.type === 'block' ? parseInt(item.number, 16) : item.blockNumber || '-'}
-                    </td>
-                    <td className="py-4">
-                      {item.timestamp ? new Date(item.timestamp).toLocaleString() : '-'}
-                    </td>
-                    <td className="py-4 font-mono text-base">
-                      <TextLink href={`/${item.type === 'block' ? 'address' : 'trx'}?hash=${item.hash}`}>
-                        {item.hash?.substring(0, 8)}...{item.hash?.substring(item.hash.length - 4)}
-                      </TextLink>
-                    </td>
-                    <td className="py-4">
-                      {item.type === 'transaction' && item.from ? (
-                        <AddressDisplay address={item.from} />
-                      ) : '-'}
-                    </td>
-                    <td className="py-4">
-                      {item.type === 'transaction' && item.to ? (
-                        <AddressDisplay address={item.to} />
-                      ) : '-'}
-                    </td>
-                    <td className="py-4 text-base">
-                      {item.type === 'transaction' && transactionDetails[item.hash] ? 
-                        transactionDetails[item.hash].displayValue : 
-                        (item.type === 'transaction' && item.value ? 
-                          (() => {
-                            try {
-                              const parsed = parseInt(item.value, 16)
-                              return isNaN(parsed) ? '0.0000 ETH' : `${(parsed / 1e18).toFixed(4)} ETH`
-                            } catch {
-                              return '0.0000 ETH'
-                            }
-                          })() : 
-                          (item.type === 'transaction' ? '0.0000 ETH' : '-')
-                        )
-                      }
-                    </td>
-                    <td className="py-4">
-                      <TimeAgo timestamp={item.timestamp} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {displayItems.length === 0 && <div className="text-center py-8">Waiting for activity...</div>}
-          </div>
-        </Card>
-      </main>
-    </div>
+    </>
   )
 } 

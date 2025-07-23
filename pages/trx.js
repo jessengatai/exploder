@@ -4,9 +4,6 @@ import { useState, useEffect } from 'react'
 import AddressIcon from '../components/AddressIcon'
 import { Check, ExternalLink } from 'lucide-react'
 import Card from '../components/ui/Card'
-import AddressDisplay from '../components/ui/Address'
-import TimeAgo from '../components/ui/TimeAgo'
-import TextLink from '../components/ui/TextLink'
 import Button from '../components/ui/Button'
 
 export default function Transactions() {

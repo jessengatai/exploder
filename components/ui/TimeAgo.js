@@ -1,5 +1,5 @@
 export default function TimeAgo({ timestamp, className = '' }) {
-  if (!timestamp) return <span className="text-gray-500">-</span>
+  if (!timestamp) return <span className="">-</span>
   
   const getRelativeTime = (timestamp) => {
     const now = Date.now()
@@ -15,7 +15,7 @@ export default function TimeAgo({ timestamp, className = '' }) {
   }
   
   return (
-    <span className={`text-base text-gray-500 ${className}`}>
+    <span className={`${className}`}>
       {getRelativeTime(timestamp)}
     </span>
   )
