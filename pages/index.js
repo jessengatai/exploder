@@ -7,6 +7,7 @@ import TimeAgo from '../components/ui/TimeAgo'
 import TextLink from '../components/ui/TextLink'
 import ListBlocks from '../components/Lists/ListBlocks'
 import ListTransactions from '../components/Lists/ListTransactions'
+import ListContracts from '../components/Lists/ListContracts'
 import { getTransactionFailureReason } from '../utils/nodeDetector'
 
 export default function Home() {
@@ -16,6 +17,7 @@ export default function Home() {
   const [transactionDetails, setTransactionDetails] = useState({})
   const [transactionStatuses, setTransactionStatuses] = useState({})
   const [transactionFailures, setTransactionFailures] = useState({})
+  const [contracts, setContracts] = useState([])
   const checkedTransactions = useRef(new Set())
 
   useEffect(() => {
@@ -91,6 +93,9 @@ export default function Home() {
         
         // Analyze transactions for values and token transfers
         analyzeTransactions(allTransactions.slice(0, 20), rpcUrl)
+        
+        // Check for contract deployments in recent transactions
+        checkForContractDeployments(allTransactions.slice(0, 20), rpcUrl)
       } catch (error) {
         console.error('Error fetching recent data:', error)
       }
@@ -148,6 +153,9 @@ export default function Home() {
                 setTimeout(() => checkTransactionStatus(tx.hash), 1000)
               }
             })
+            
+            // Check for contract deployments in this block
+            setTimeout(() => checkForContractDeployments(block.transactions, rpcUrl), 2000)
           }
         } else if (data.params.result) {
           const txHash = data.params.result
@@ -366,6 +374,30 @@ export default function Home() {
           [txHash]: status
         }))
         
+        // Check if this transaction created a contract
+        if (status === 'success' && result.result.contractAddress) {
+          console.log('Contract creation detected in checkTransactionStatus:', txHash, result.result.contractAddress)
+          const tx = transactions.find(t => t.hash === txHash)
+          if (tx) {
+            const contractInfo = {
+              address: result.result.contractAddress,
+              deployer: tx.from,
+              transactionHash: txHash,
+              blockNumber: parseInt(result.result.blockNumber, 16),
+              timestamp: Date.now()
+            }
+            setContracts(prev => {
+              // Don't add if already exists
+              if (!prev.find(c => c.address === contractInfo.address)) {
+                console.log('Adding contract from checkTransactionStatus:', contractInfo)
+                return [contractInfo, ...prev.slice(0, 9)]
+              }
+              console.log('Contract already exists from checkTransactionStatus')
+              return prev
+            })
+          }
+        }
+        
         // If transaction failed, get failure reason
         if (status === 'failed') {
           const failureReason = await getTransactionFailureReason(rpcUrl, txHash)
@@ -384,6 +416,102 @@ export default function Home() {
       console.error('Error checking transaction status:', error)
     }
   }
+
+  const checkForContractDeployments = async (txs, url) => {
+    console.log('Checking for contract deployments in', txs.length, 'transactions')
+    for (const tx of txs) {
+      if (!tx || !tx.hash) continue
+      
+      console.log('Checking transaction:', tx.hash, 'to:', tx.to, 'input length:', tx.input?.length)
+      
+      // Check if this looks like a contract deployment
+      if (!tx.to && tx.input && tx.input !== '0x' && tx.input.length > 2) {
+        console.log('Potential contract deployment found:', tx.hash)
+        // Get transaction receipt to confirm contract creation
+        try {
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'eth_getTransactionReceipt',
+              params: [tx.hash]
+            })
+          })
+          const result = await response.json()
+          
+          console.log('Transaction receipt for', tx.hash, ':', result.result)
+          
+          if (result.result && result.result.status === '0x1' && result.result.contractAddress) {
+            console.log('Contract deployment confirmed:', result.result.contractAddress)
+            const contractInfo = {
+              address: result.result.contractAddress,
+              deployer: tx.from,
+              transactionHash: tx.hash,
+              blockNumber: parseInt(result.result.blockNumber, 16),
+              timestamp: Date.now()
+            }
+            
+            setContracts(prev => {
+              // Don't add if already exists
+              if (!prev.find(c => c.address === contractInfo.address)) {
+                console.log('Adding contract to state:', contractInfo)
+                return [contractInfo, ...prev.slice(0, 9)]
+              }
+              console.log('Contract already exists in state')
+              return prev
+            })
+          }
+        } catch (error) {
+          console.error('Error checking contract deployment:', error)
+        }
+      }
+    }
+  }
+
+  // Manual check for the specific contract deployment
+  useEffect(() => {
+    const checkSpecificContract = async () => {
+      const txHash = '0x38b84d78ba5a653ddcbcb4b4d42f562cad4e579ef86817e2d5870be52672b79f'
+      try {
+        const response = await fetch(rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'eth_getTransactionReceipt',
+            params: [txHash]
+          })
+        })
+        const result = await response.json()
+        console.log('Manual check for specific transaction:', result.result)
+        
+        if (result.result && result.result.status === '0x1' && result.result.contractAddress) {
+          console.log('Manual check found contract:', result.result.contractAddress)
+          const contractInfo = {
+            address: result.result.contractAddress,
+            deployer: result.result.from,
+            transactionHash: txHash,
+            blockNumber: parseInt(result.result.blockNumber, 16),
+            timestamp: Date.now()
+          }
+          setContracts(prev => {
+            if (!prev.find(c => c.address === contractInfo.address)) {
+              console.log('Manually adding contract:', contractInfo)
+              return [contractInfo, ...prev.slice(0, 9)]
+            }
+            return prev
+          })
+        }
+      } catch (error) {
+        console.error('Error in manual contract check:', error)
+      }
+    }
+    
+    checkSpecificContract()
+  }, [rpcUrl])
 
   return (
     <>
@@ -413,11 +541,7 @@ export default function Home() {
           {/* Contracts Card */}
           <Card>
             <h2 className="text-xl font-bold mb-4">Recent Contracts</h2>
-            <div className="space-y-3">
-              <div className="text-center py-8 text-gray-400">
-                Contract activity coming soon...
-              </div>
-            </div>
+            <ListContracts contracts={contracts} />
           </Card>
         </div>
     </>
