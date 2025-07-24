@@ -6,11 +6,22 @@ export function BlockchainProvider({ children }) {
   const [blocks, setBlocks] = useState([])
   const [transactions, setTransactions] = useState([])
   const [transactionStatuses, setTransactionStatuses] = useState({})
+  const [logs, setLogs] = useState([])
   const [rpcUrl, setRpcUrl] = useState('http://localhost:8545')
   const [isInitialized, setIsInitialized] = useState(false)
   const wsRef = useRef(null)
   const processing = useRef(new Set())
   const validatedTransactions = useRef(new Set())
+
+  const addLog = (message, type = 'info') => {
+    const logEntry = {
+      id: Date.now() + Math.random(),
+      message,
+      type,
+      timestamp: Date.now()
+    }
+    setLogs(prev => [logEntry, ...prev.slice(0, 49)]) // Keep last 50 logs
+  }
 
   useEffect(() => {
     fetch('/config.json')
@@ -18,6 +29,7 @@ export function BlockchainProvider({ children }) {
       .then(config => setRpcUrl(config.rpcUrl))
       .catch(() => setRpcUrl('http://localhost:8545'))
       .then(() => {
+        addLog('Blockchain context initialized', 'system')
         fetchRecentData()
         setupWebSocket()
       })
@@ -42,24 +54,28 @@ export function BlockchainProvider({ children }) {
         })
       })
       const result = await response.json()
-      console.log('Transaction receipt for', txHash, ':', result)
       if (result.result) {
         const status = result.result.status === '0x1' ? 'success' : 'failed'
-        console.log('Setting status for', txHash, 'to:', status)
         setTransactionStatuses(prev => ({
           ...prev,
           [txHash]: status
         }))
+        
+        if (status === 'failed') {
+          addLog(`Transaction ${txHash.slice(0, 8)}... failed`, 'error')
+        } else {
+          addLog(`Transaction ${txHash.slice(0, 8)}... succeeded`, 'success')
+        }
       } else {
-        console.log('No receipt found for', txHash)
       }
     } catch (error) {
-      console.error('Error checking transaction status:', error)
+      addLog(`Error checking transaction status: ${error.message}`, 'error')
     }
   }
 
   const fetchRecentData = async () => {
     try {
+      addLog('Fetching recent blockchain data', 'info')
       const latestBlockRes = await fetch(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -100,7 +116,12 @@ export function BlockchainProvider({ children }) {
       const allTransactions = []
       for (const block of recentBlocks) {
         if (block.transactions && block.transactions.length > 0) {
-          allTransactions.push(...block.transactions)
+          const blockTimestamp = parseInt(block.timestamp, 16) * 1000
+          const transactionsWithTimestamp = block.transactions.map(tx => ({
+            ...tx,
+            timestamp: blockTimestamp
+          }))
+          allTransactions.push(...transactionsWithTimestamp)
           block.transactions.forEach(tx => {
             if (tx.hash && tx.from && tx.to) {
               validatedTransactions.current.add(tx.hash)
@@ -109,17 +130,18 @@ export function BlockchainProvider({ children }) {
         }
       }
       
-      // Check status for recent transactions (first 5)
-      const recentTxs = allTransactions.slice(0, 5)
-      recentTxs.forEach(tx => {
+      // Check status for all transactions
+      allTransactions.forEach(tx => {
         if (tx.hash) {
           setTimeout(() => checkTransactionStatus(tx.hash), 1000)
         }
       })
+      
       setTransactions(allTransactions.slice(0, 20))
       setIsInitialized(true)
+      addLog(`Loaded ${recentBlocks.length} blocks and ${allTransactions.length} transactions`, 'success')
     } catch (error) {
-      console.error('Error fetching recent data:', error)
+      addLog(`Error fetching recent data: ${error.message}`, 'error')
     }
   }
 
@@ -128,15 +150,25 @@ export function BlockchainProvider({ children }) {
       wsRef.current.close()
     }
     
-    const ws = new WebSocket(rpcUrl.replace('http', 'ws'))
+    const wsUrl = rpcUrl.replace('http', 'ws')
+    const ws = new WebSocket(wsUrl)
     wsRef.current = ws
     
     ws.onopen = () => {
+      addLog('WebSocket connected to node', 'success')
       ws.send(JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
         method: 'eth_subscribe',
         params: ['newHeads']
+      }))
+      
+      // Subscribe to pending transactions
+      ws.send(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'eth_subscribe',
+        params: ['newPendingTransactions']
       }))
     }
 
@@ -145,20 +177,28 @@ export function BlockchainProvider({ children }) {
         const data = JSON.parse(event.data)
         
         if (data.method === 'eth_subscription' && data.params.subscription) {
-          const block = data.params.result
-          await updateBlock(block)
+          if (data.params.result && typeof data.params.result === 'string') {
+            // Pending transaction
+            const txHash = data.params.result
+            addLog(`New pending transaction: ${txHash.slice(0, 8)}...`, 'pending')
+          } else if (data.params.result && data.params.result.number) {
+            // New block
+            const block = data.params.result
+            addLog(`New block mined: #${parseInt(block.number, 16)}`, 'block')
+            await updateBlock(block)
+          }
         }
       } catch (error) {
-        console.error('Error processing websocket message:', error)
+        addLog(`WebSocket error: ${error.message}`, 'error')
       }
     }
 
     ws.onerror = (error) => {
-      console.error('WebSocket error:', error)
+      addLog('WebSocket connection error', 'error')
     }
 
     ws.onclose = () => {
-      console.log('WebSocket closed')
+      addLog('WebSocket connection closed', 'warning')
     }
   }
 
@@ -202,13 +242,16 @@ export function BlockchainProvider({ children }) {
       })
       
       if (validatedBlock.transactions && validatedBlock.transactions.length > 0) {
-        const completeTransactions = validatedBlock.transactions.filter(tx => 
-          tx.hash && tx.from && tx.to && tx.value !== undefined
-        )
+        const blockTimestamp = parseInt(validatedBlock.timestamp, 16) * 1000
+        const completeTransactions = validatedBlock.transactions
+          .filter(tx => tx.hash && tx.from && tx.to && tx.value !== undefined)
+          .map(tx => ({
+            ...tx,
+            timestamp: blockTimestamp
+          }))
         
         completeTransactions.forEach(tx => {
           validatedTransactions.current.add(tx.hash)
-          // Check transaction status after a delay
           setTimeout(() => checkTransactionStatus(tx.hash), 1000)
         })
         
@@ -218,9 +261,11 @@ export function BlockchainProvider({ children }) {
           )
           return [...newTxs, ...prev.slice(0, 19 - newTxs.length)]
         })
+        
+        addLog(`Block #${parseInt(validatedBlock.number, 16)} contains ${completeTransactions.length} transactions`, 'info')
       }
     } catch (error) {
-      console.error('Error updating block:', error)
+      addLog(`Error updating block: ${error.message}`, 'error')
     } finally {
       processing.current.delete(blockData.hash)
     }
@@ -235,6 +280,8 @@ export function BlockchainProvider({ children }) {
       blocks, 
       transactions: validatedTransactionsList, 
       transactionStatuses,
+      logs,
+      addLog,
       rpcUrl,
       isInitialized 
     }}>

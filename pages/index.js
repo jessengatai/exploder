@@ -4,11 +4,12 @@ import Card from '../components/ui/Card'
 import ListBlocks from '../components/Lists/ListBlocks'
 import ListTransactions from '../components/Lists/ListTransactions'
 import ListContracts from '../components/Lists/ListContracts'
+import ListLogs from '../components/Lists/ListLogs'
 import { useBlockchain } from '../contexts/BlockchainContext'
 import { getTransactionFailureReason } from '../utils/nodeDetector'
 
 export default function Home() {
-  const { blocks, transactions, transactionStatuses, rpcUrl } = useBlockchain()
+  const { blocks, transactions, transactionStatuses, logs, rpcUrl } = useBlockchain()
   const [transactionDetails, setTransactionDetails] = useState({})
   const [transactionFailures, setTransactionFailures] = useState({})
   const [contracts, setContracts] = useState([])
@@ -215,13 +216,13 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3">
-          <Card className='border-0'>
+      <div className="grid grid-cols-1 lg:grid-cols-4">
+          <Card className='border-0 border-0 border-r-1'>
             <h2 className="text-xl font-bold mb-4">Blocks</h2>
             <ListBlocks blocks={displayItems.filter(item => item.type === 'block').slice(0, 10)} />
           </Card>
 
-          <Card className='border-y-0'>
+          <Card className='border-0 border-r-1'>
             <h2 className="text-xl font-bold mb-4">Transactions</h2>
             <ListTransactions 
               transactions={displayItems.filter(item => item.type === 'transaction').slice(0, 10)}
@@ -230,9 +231,14 @@ export default function Home() {
             />
           </Card>
 
-          <Card className='border-0'>
+          <Card className='border-0 border-r-1'>
             <h2 className="text-xl font-bold mb-4">Contracts</h2>
             <ListContracts contracts={contracts} />
+          </Card>
+
+          <Card className='border-0'>
+            <h2 className="text-xl font-bold mb-4">Logs</h2>
+            <ListLogs logs={logs} />
           </Card>
         </div>
     </>

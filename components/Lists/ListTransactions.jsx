@@ -15,7 +15,7 @@ export default function ListTransactions({ transactions, transactionStatuses, tr
               {transactionStatuses[tx.hash] === 'failed' ? (
                 <X className="w-4 h-4 text-rose-500" />
               ) : (
-                <ArrowLeftRight className="w-4 h-4 text-emerald-500" />
+                <ArrowLeftRight className="w-4 h-4 text-teal-500" />
               )}
               <span className="">
               <TextLink href={`/trx?hash=${tx.hash}`}>
