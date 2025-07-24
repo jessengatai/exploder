@@ -11,7 +11,6 @@ import { getTransactionFailureReason } from '../utils/nodeDetector'
 export default function Home() {
   const { blocks, transactions, transactionStatuses, logs, rpcUrl } = useBlockchain()
   const [transactionDetails, setTransactionDetails] = useState({})
-  const [transactionFailures, setTransactionFailures] = useState({})
   const [contracts, setContracts] = useState([])
 
   useEffect(() => {
@@ -75,7 +74,7 @@ export default function Home() {
             displayValue = `${ethValue} ETH`
           }
         } catch (error) {
-          console.error('Error parsing transaction value:', error)
+          // Silently handle parsing errors
         }
       }
       
@@ -93,7 +92,7 @@ export default function Home() {
               displayValue = `${formattedAmount} ${tokenInfo.symbol}`
             }
           } catch (error) {
-            console.error('Error analyzing token transfer:', error)
+            // Silently handle token analysis errors
           }
         }
       }

@@ -24,6 +24,12 @@ export function BlockchainProvider({ children }) {
     
     loggedEvents.current.add(eventKey)
     
+    // Clean up loggedEvents if it gets too large (keep last 1000 events)
+    if (loggedEvents.current.size > 1000) {
+      const eventsArray = Array.from(loggedEvents.current)
+      loggedEvents.current = new Set(eventsArray.slice(-500))
+    }
+    
     setLogs(prev => {
       const logEntry = {
         id: Date.now() + Math.random(),

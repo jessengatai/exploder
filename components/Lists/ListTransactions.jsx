@@ -21,7 +21,7 @@ export default function ListTransactions({ transactions, transactionStatuses, tr
                 Transaction
               </div>
             </div>
-            {/* <TimeAgo timestamp={tx.timestamp} /> */}
+            <TimeAgo timestamp={tx.timestamp} />
 
             <div className="text-slate-600">
               <DisplayHash hash={tx.hash} />  
