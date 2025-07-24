@@ -1,5 +1,3 @@
-import TimeAgo from '../ui/TimeAgo'
-
 export default function ListLogs({ logs }) {
   return (
     <div className="space-y-1 text-sm">
