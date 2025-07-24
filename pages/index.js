@@ -8,9 +8,8 @@ import { useBlockchain } from '../contexts/BlockchainContext'
 import { getTransactionFailureReason } from '../utils/nodeDetector'
 
 export default function Home() {
-  const { blocks, transactions, rpcUrl } = useBlockchain()
+  const { blocks, transactions, transactionStatuses, rpcUrl } = useBlockchain()
   const [transactionDetails, setTransactionDetails] = useState({})
-  const [transactionStatuses, setTransactionStatuses] = useState({})
   const [transactionFailures, setTransactionFailures] = useState({})
   const [contracts, setContracts] = useState([])
 
@@ -204,6 +203,10 @@ export default function Home() {
     }
   }
 
+  // Debug: Log transaction statuses
+  console.log('Transaction statuses:', transactionStatuses)
+  console.log('Display transactions:', displayItems.filter(item => item.type === 'transaction').slice(0, 10).map(tx => ({ hash: tx.hash, status: transactionStatuses[tx.hash] })))
+
   return (
     <>
       <Head>
@@ -214,12 +217,12 @@ export default function Home() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3">
           <Card className='border-0'>
-            <h2 className="font-mono text-lg mb-4">Blocks</h2>
+            <h2 className="text-xl font-bold mb-4">Blocks</h2>
             <ListBlocks blocks={displayItems.filter(item => item.type === 'block').slice(0, 10)} />
           </Card>
 
           <Card className='border-y-0'>
-            <h2 className="font-mono text-lg mb-4">Transactions</h2>
+            <h2 className="text-xl font-bold mb-4">Transactions</h2>
             <ListTransactions 
               transactions={displayItems.filter(item => item.type === 'transaction').slice(0, 10)}
               transactionStatuses={transactionStatuses}
@@ -228,7 +231,7 @@ export default function Home() {
           </Card>
 
           <Card className='border-0'>
-            <h2 className="font-mono text-lg mb-4">Contracts</h2>
+            <h2 className="text-xl font-bold mb-4">Contracts</h2>
             <ListContracts contracts={contracts} />
           </Card>
         </div>
