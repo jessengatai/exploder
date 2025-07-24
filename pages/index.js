@@ -1,214 +1,37 @@
 import Head from 'next/head'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import Card from '../components/ui/Card'
 import ListBlocks from '../components/Lists/ListBlocks'
 import ListTransactions from '../components/Lists/ListTransactions'
 import ListContracts from '../components/Lists/ListContracts'
+import { useBlockchain } from '../contexts/BlockchainContext'
 import { getTransactionFailureReason } from '../utils/nodeDetector'
 
 export default function Home() {
-  const [blocks, setBlocks] = useState([])
-  const [transactions, setTransactions] = useState([])
-  const [rpcUrl, setRpcUrl] = useState('http://localhost:8545')
+  const { blocks, transactions, rpcUrl } = useBlockchain()
   const [transactionDetails, setTransactionDetails] = useState({})
   const [transactionStatuses, setTransactionStatuses] = useState({})
   const [transactionFailures, setTransactionFailures] = useState({})
   const [contracts, setContracts] = useState([])
-  const checkedTransactions = useRef(new Set())
 
   useEffect(() => {
-    fetch('/config.json')
-      .then(res => res.json())
-      .then(config => {
-        setRpcUrl(config.rpcUrl)
-      })
-      .catch(() => {
-        setRpcUrl('http://localhost:8545')
-      })
-      .then(() => {
-        // Fetch recent blocks and transactions
-        fetchRecentData()
-      })
-
-    const fetchRecentData = async () => {
-      try {
-        // Get latest block number
-        const latestBlockRes = await fetch(rpcUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'eth_blockNumber',
-            params: []
-          })
-        })
-        const latestBlockData = await latestBlockRes.json()
-        const latestBlockNum = parseInt(latestBlockData.result, 16)
-        
-        // Fetch last 10 blocks
-        const blockPromises = []
-        for (let i = 0; i < 10 && latestBlockNum - i >= 0; i++) {
-          blockPromises.push(
-            fetch(rpcUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'eth_getBlockByNumber',
-                params: [`0x${(latestBlockNum - i).toString(16)}`, true]
-              })
-            }).then(res => res.json())
-          )
-        }
-        
-        const blockResults = await Promise.all(blockPromises)
-        const recentBlocks = blockResults
-          .map(result => result.result)
-          .filter(block => block)
-          .reverse()
-        
-        setBlocks(recentBlocks)
-        
-        // Get transactions from these blocks
-        const allTransactions = []
-        for (const block of recentBlocks) {
-          if (block.transactions && block.transactions.length > 0) {
-            allTransactions.push(...block.transactions)
-          }
-        }
-        setTransactions(allTransactions.slice(0, 20))
-        
-        // Check transaction statuses (only for recent transactions)
-        allTransactions.slice(0, 5).forEach(tx => {
-          if (tx.hash) {
-            checkTransactionStatus(tx.hash)
-          }
-        })
-        
-        // Analyze transactions for values and token transfers
-        analyzeTransactions(allTransactions.slice(0, 20), rpcUrl)
-        
-        // Check for contract deployments in recent transactions
-        checkForContractDeployments(allTransactions.slice(0, 20), rpcUrl)
-      } catch (error) {
-        console.error('Error fetching recent data:', error)
-      }
+    if (transactions.length > 0) {
+      analyzeTransactions(transactions, rpcUrl)
+      checkForContractDeployments(transactions, rpcUrl)
     }
-
-    const ws = new WebSocket(rpcUrl.replace('http', 'ws'))
-    
-    ws.onopen = () => {
-      // Subscribe to new blocks
-      ws.send(JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'eth_subscribe',
-        params: ['newHeads']
-      }))
-      
-      // Subscribe to new transactions
-      ws.send(JSON.stringify({
-        jsonrpc: '2.0',
-        id: 2,
-        method: 'eth_subscribe',
-        params: ['newPendingTransactions']
-      }))
-    }
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      if (data.method === 'eth_subscription') {
-        if (data.params.subscription) {
-          const block = data.params.result
-          setBlocks(prev => [block, ...prev.slice(0, 9)])
-          
-          // Update transaction details when block is mined
-          if (block.transactions && block.transactions.length > 0) {
-            setTransactions(prev => {
-              const updated = [...prev]
-              block.transactions.forEach(blockTx => {
-                const existingIndex = updated.findIndex(tx => tx.hash === blockTx.hash)
-                if (existingIndex !== -1) {
-                  // Update with full transaction details from block
-                  updated[existingIndex] = {
-                    ...updated[existingIndex],
-                    ...blockTx,
-                    blockNumber: parseInt(block.number, 16)
-                  }
-                }
-              })
-              return updated
-            })
-            
-            // Check status for transactions in this block (only if we have them)
-            block.transactions.forEach(tx => {
-              if (tx.hash && transactions.find(t => t.hash === tx.hash)) {
-                // Only check status for transactions we're already tracking
-                setTimeout(() => checkTransactionStatus(tx.hash), 1000)
-              }
-            })
-            
-            // Check for contract deployments in this block
-            setTimeout(() => checkForContractDeployments(block.transactions, rpcUrl), 2000)
-          }
-        } else if (data.params.result) {
-          const txHash = data.params.result
-          // Get full transaction details
-          fetch(rpcUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: 1,
-              method: 'eth_getTransactionByHash',
-              params: [txHash]
-            })
-          })
-          .then(res => res.json())
-          .then(result => {
-            if (result.result && result.result.hash) {
-              const tx = result.result
-              // Add transaction even if some fields are missing initially
-              // They will be populated when the transaction is mined
-              setTransactions(prev => {
-                // Don't add if already exists
-                if (!prev.find(t => t.hash === tx.hash)) {
-                  return [tx, ...prev.slice(0, 9)]
-                }
-                return prev
-              })
-              
-              // Check transaction status (only for pending transactions we care about)
-              if (transactions.length < 10) {
-                checkTransactionStatus(tx.hash)
-              }
-            }
-          })
-          .catch(error => {
-            console.error('Error fetching transaction details:', error)
-          })
-        }
-      }
-    }
-
-    return () => ws.close()
-  }, [rpcUrl])
+  }, [transactions, rpcUrl])
 
   // Create chronological list with blocks and their transactions
   const allItems = []
   
   // Add blocks with their transactions
   blocks.forEach(block => {
-    // Add the block itself
     allItems.push({
       ...block,
       type: 'block',
       timestamp: parseInt(block.timestamp, 16) * 1000
     })
     
-    // Add transactions from this block
     if (block.transactions && block.transactions.length > 0) {
       block.transactions.forEach(tx => {
         allItems.push({
@@ -221,7 +44,7 @@ export default function Home() {
     }
   })
   
-  // Add standalone transactions (from pending pool)
+  // Add standalone transactions
   transactions.forEach(tx => {
     if (!allItems.find(item => item.type === 'transaction' && item.hash === tx.hash)) {
       allItems.push({
@@ -232,25 +55,18 @@ export default function Home() {
     }
   })
   
-  // Sort by timestamp (newest first)
   allItems.sort((a, b) => b.timestamp - a.timestamp)
   const displayItems = allItems.slice(0, 50)
-  
-
-
-
 
   const analyzeTransactions = async (txs, url) => {
     const details = {}
     
     for (const tx of txs) {
-      // Validate transaction data
       if (!tx || !tx.hash) continue
       
       let ethValue = '0.0000'
       let displayValue = '0.0000 ETH'
       
-      // Safely parse ETH value
       if (tx.value && tx.value !== '0x') {
         try {
           const parsedValue = parseInt(tx.value, 16)
@@ -263,7 +79,6 @@ export default function Home() {
         }
       }
       
-      // Check if this is a token transfer
       if (tx.input && tx.input !== '0x' && tx.input.length > 10) {
         const methodId = tx.input.substring(0, 10)
         
@@ -291,7 +106,6 @@ export default function Home() {
 
   const getTokenInfo = async (tokenAddress, url) => {
     try {
-      // Get token symbol
       const symbolRes = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -301,13 +115,12 @@ export default function Home() {
           method: 'eth_call',
           params: [{
             to: tokenAddress,
-            data: '0x95d89b41' // symbol()
+            data: '0x95d89b41'
           }, 'latest']
         })
       })
       const symbolData = await symbolRes.json()
       
-      // Get token decimals
       const decimalsRes = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -317,7 +130,7 @@ export default function Home() {
           method: 'eth_call',
           params: [{
             to: tokenAddress,
-            data: '0x313ce567' // decimals()
+            data: '0x313ce567'
           }, 'latest']
         })
       })
@@ -350,80 +163,11 @@ export default function Home() {
     }
   }
 
-  const checkTransactionStatus = async (txHash) => {
-    try {
-      const response = await fetch(rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'eth_getTransactionReceipt',
-          params: [txHash]
-        })
-      })
-      const result = await response.json()
-      if (result.result) {
-        const status = result.result.status === '0x1' ? 'success' : 'failed'
-        setTransactionStatuses(prev => ({
-          ...prev,
-          [txHash]: status
-        }))
-        
-        // Check if this transaction created a contract
-        if (status === 'success' && result.result.contractAddress) {
-          console.log('Contract creation detected in checkTransactionStatus:', txHash, result.result.contractAddress)
-          const tx = transactions.find(t => t.hash === txHash)
-          if (tx) {
-            const contractInfo = {
-              address: result.result.contractAddress,
-              deployer: tx.from,
-              transactionHash: txHash,
-              blockNumber: parseInt(result.result.blockNumber, 16),
-              timestamp: Date.now()
-            }
-            setContracts(prev => {
-              // Don't add if already exists
-              if (!prev.find(c => c.address === contractInfo.address)) {
-                console.log('Adding contract from checkTransactionStatus:', contractInfo)
-                return [contractInfo, ...prev.slice(0, 9)]
-              }
-              console.log('Contract already exists from checkTransactionStatus')
-              return prev
-            })
-          }
-        }
-        
-        // If transaction failed, get failure reason
-        if (status === 'failed') {
-          const failureReason = await getTransactionFailureReason(rpcUrl, txHash)
-          if (failureReason) {
-            setTransactionFailures(prev => ({
-              ...prev,
-              [txHash]: failureReason
-            }))
-          }
-        }
-      } else {
-        // Retry after 2 seconds for transactions without receipts
-        setTimeout(() => checkTransactionStatus(txHash), 2000)
-      }
-    } catch (error) {
-      console.error('Error checking transaction status:', error)
-    }
-  }
-
   const checkForContractDeployments = async (txs, url) => {
-    console.log('Checking for contract deployments in', txs.length, 'transactions')
     for (const tx of txs) {
       if (!tx || !tx.hash) continue
       
-      console.log('Checking transaction:', tx.hash, 'to:', tx.to, 'input length:', tx.input?.length)
-      
-      // Check if this looks like a contract deployment
       if (!tx.to && tx.input && tx.input !== '0x' && tx.input.length > 2) {
-        console.log('Potential contract deployment found:', tx.hash)
-        // Get transaction receipt to confirm contract creation
         try {
           const response = await fetch(url, {
             method: 'POST',
@@ -437,10 +181,7 @@ export default function Home() {
           })
           const result = await response.json()
           
-          console.log('Transaction receipt for', tx.hash, ':', result.result)
-          
           if (result.result && result.result.status === '0x1' && result.result.contractAddress) {
-            console.log('Contract deployment confirmed:', result.result.contractAddress)
             const contractInfo = {
               address: result.result.contractAddress,
               deployer: tx.from,
@@ -450,12 +191,9 @@ export default function Home() {
             }
             
             setContracts(prev => {
-              // Don't add if already exists
               if (!prev.find(c => c.address === contractInfo.address)) {
-                console.log('Adding contract to state:', contractInfo)
                 return [contractInfo, ...prev.slice(0, 9)]
               }
-              console.log('Contract already exists in state')
               return prev
             })
           }
@@ -466,49 +204,6 @@ export default function Home() {
     }
   }
 
-  // Manual check for the specific contract deployment
-  useEffect(() => {
-    const checkSpecificContract = async () => {
-      const txHash = '0x38b84d78ba5a653ddcbcb4b4d42f562cad4e579ef86817e2d5870be52672b79f'
-      try {
-        const response = await fetch(rpcUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'eth_getTransactionReceipt',
-            params: [txHash]
-          })
-        })
-        const result = await response.json()
-        console.log('Manual check for specific transaction:', result.result)
-        
-        if (result.result && result.result.status === '0x1' && result.result.contractAddress) {
-          console.log('Manual check found contract:', result.result.contractAddress)
-          const contractInfo = {
-            address: result.result.contractAddress,
-            deployer: result.result.from,
-            transactionHash: txHash,
-            blockNumber: parseInt(result.result.blockNumber, 16),
-            timestamp: Date.now()
-          }
-          setContracts(prev => {
-            if (!prev.find(c => c.address === contractInfo.address)) {
-              console.log('Manually adding contract:', contractInfo)
-              return [contractInfo, ...prev.slice(0, 9)]
-            }
-            return prev
-          })
-        }
-      } catch (error) {
-        console.error('Error in manual contract check:', error)
-      }
-    }
-    
-    checkSpecificContract()
-  }, [rpcUrl])
-
   return (
     <>
       <Head>
@@ -518,13 +213,11 @@ export default function Home() {
       </Head>
 
       <div className="grid grid-cols-1 lg:grid-cols-3">
-          {/* Blocks Card */}
           <Card className='border-0'>
             <h2 className="text-xl font-bold mb-4">Blocks</h2>
             <ListBlocks blocks={displayItems.filter(item => item.type === 'block').slice(0, 10)} />
           </Card>
 
-          {/* Transactions Card */}
           <Card className='border-y-0'>
             <h2 className="text-xl font-bold mb-4">Transactions</h2>
             <ListTransactions 
@@ -534,7 +227,6 @@ export default function Home() {
             />
           </Card>
 
-          {/* Contracts Card */}
           <Card className='border-0'>
             <h2 className="text-xl font-bold mb-4">Contracts</h2>
             <ListContracts contracts={contracts} />
