@@ -520,13 +520,13 @@ export default function Home() {
       <div className="grid grid-cols-1 lg:grid-cols-3">
           {/* Blocks Card */}
           <Card className='border-0'>
-            <h2 className="text-xl font-bold mb-4">Recent Blocks</h2>
+            <h2 className="text-xl font-bold mb-4">Blocks</h2>
             <ListBlocks blocks={displayItems.filter(item => item.type === 'block').slice(0, 10)} />
           </Card>
 
           {/* Transactions Card */}
           <Card className='border-y-0'>
-            <h2 className="text-xl font-bold mb-4">Recent Transactions</h2>
+            <h2 className="text-xl font-bold mb-4">Transactions</h2>
             <ListTransactions 
               transactions={displayItems.filter(item => item.type === 'transaction').slice(0, 10)}
               transactionStatuses={transactionStatuses}
@@ -536,7 +536,7 @@ export default function Home() {
 
           {/* Contracts Card */}
           <Card className='border-0'>
-            <h2 className="text-xl font-bold mb-4">Recent Contracts</h2>
+            <h2 className="text-xl font-bold mb-4">Contracts</h2>
             <ListContracts contracts={contracts} />
           </Card>
         </div>
