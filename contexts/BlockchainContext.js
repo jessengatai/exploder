@@ -148,13 +148,6 @@ export function BlockchainProvider({ children }) {
         }
       }
       
-      // Check status for all transactions
-      allTransactions.forEach(tx => {
-        if (tx.hash) {
-          checkTransactionStatus(tx.hash)
-        }
-      })
-      
       setTransactions(allTransactions.slice(0, 20))
       setIsInitialized(true)
       addLog(`Loaded ${recentBlocks.length} blocks and ${allTransactions.length} transactions`, 'success')
