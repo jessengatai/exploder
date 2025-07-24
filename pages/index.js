@@ -1,10 +1,6 @@
 import Head from 'next/head'
 import { useState, useEffect, useRef } from 'react'
-import AddressIcon from '../components/AddressIcon'
-import { Check, ExternalLink, Square, ArrowLeftRight, Box, X } from 'lucide-react'
 import Card from '../components/ui/Card'
-import TimeAgo from '../components/ui/TimeAgo'
-import TextLink from '../components/ui/TextLink'
 import ListBlocks from '../components/Lists/ListBlocks'
 import ListTransactions from '../components/Lists/ListTransactions'
 import ListContracts from '../components/Lists/ListContracts'
@@ -521,15 +517,15 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3">
           {/* Blocks Card */}
-          <Card>
+          <Card className='border-0'>
             <h2 className="text-xl font-bold mb-4">Recent Blocks</h2>
             <ListBlocks blocks={displayItems.filter(item => item.type === 'block').slice(0, 10)} />
           </Card>
 
           {/* Transactions Card */}
-          <Card>
+          <Card className='border-y-0'>
             <h2 className="text-xl font-bold mb-4">Recent Transactions</h2>
             <ListTransactions 
               transactions={displayItems.filter(item => item.type === 'transaction').slice(0, 10)}
@@ -539,7 +535,7 @@ export default function Home() {
           </Card>
 
           {/* Contracts Card */}
-          <Card>
+          <Card className='border-0'>
             <h2 className="text-xl font-bold mb-4">Recent Contracts</h2>
             <ListContracts contracts={contracts} />
           </Card>

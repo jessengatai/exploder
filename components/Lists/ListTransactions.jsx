@@ -3,12 +3,13 @@ import TimeAgo from '../ui/TimeAgo'
 import TextLink from '../ui/TextLink'
 import DisplayAddress from '../ui/DisplayAddress'
 import DisplayHash from '../ui/DisplayHash'
+import CardIndent from '../ui/CardIndent'
 
 export default function ListTransactions({ transactions, transactionStatuses, transactionDetails }) {
   return (
     <div className="space-y-3">
       {transactions.map((tx, i) => (
-        <div key={i} className="px-4 py-3 bg-slate-900/50 rounded-lg">
+        <CardIndent key={i}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               {transactionStatuses[tx.hash] === 'failed' ? (
@@ -56,7 +57,7 @@ export default function ListTransactions({ transactions, transactionStatuses, tr
             </div>
 
           </div>
-        </div>
+        </CardIndent>
       ))}
       {transactions.length === 0 && (
         <div className="text-center py-4 text-gray-400">No transactions yet</div>

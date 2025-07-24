@@ -2,7 +2,7 @@ import { Search } from 'lucide-react'
 
 export default function Navbar({ nodeInfo }) {
   return (
-    <nav className="bg-black border-b border-gray-900 px-6 py-4">
+    <nav className="bg-black border-b border-zinc-900 px-6 py-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-6">
           {/* Logo and Title */}
