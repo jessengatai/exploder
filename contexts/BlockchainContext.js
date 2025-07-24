@@ -133,7 +133,7 @@ export function BlockchainProvider({ children }) {
       // Check status for all transactions
       allTransactions.forEach(tx => {
         if (tx.hash) {
-          setTimeout(() => checkTransactionStatus(tx.hash), 1000)
+          checkTransactionStatus(tx.hash)
         }
       })
       
@@ -252,7 +252,7 @@ export function BlockchainProvider({ children }) {
         
         completeTransactions.forEach(tx => {
           validatedTransactions.current.add(tx.hash)
-          setTimeout(() => checkTransactionStatus(tx.hash), 1000)
+          checkTransactionStatus(tx.hash)
         })
         
         setTransactions(prev => {
