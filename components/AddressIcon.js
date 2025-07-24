@@ -1,38 +1,30 @@
 import { useEffect, useRef } from 'react'
-import blockies from 'blockies'
+import jazzicon from '@metamask/jazzicon'
 
 export default function AddressIcon({ address, size = 20, className = '' }) {
-  const canvasRef = useRef(null)
+  const containerRef = useRef(null)
 
   useEffect(() => {
-    if (!address || !canvasRef.current) return
+    if (!address || !containerRef.current) return
 
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
+    const container = containerRef.current
     
-    // Clear canvas
-    ctx.clearRect(0, 0, size, size)
+    // Clear previous content
+    container.innerHTML = ''
     
-    // Generate blockie
-    const icon = blockies({
-      seed: address.toLowerCase(),
-      size: 8,
-      scale: size / 8
-    })
+    // Generate jazzicon
+    const icon = jazzicon(size, parseInt(address.slice(2, 10), 16))
     
-    // Draw to canvas
-    ctx.drawImage(icon, 0, 0)
+    // Add to container
+    container.appendChild(icon)
   }, [address, size])
 
   if (!address) return null
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={size}
-      height={size}
+    <div
+      ref={containerRef}
       className={`inline-block rounded ${className}`}
-      style={{ imageRendering: 'pixelated' }}
     />
   )
 } 

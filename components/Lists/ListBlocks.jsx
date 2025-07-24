@@ -11,7 +11,7 @@ export default function ListBlocks({ blocks }) {
         <CardIndent key={i}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Box className="w-4 h-4 text-emerald-500" />
+            <Box className="w-4 h-4 text-indigo-500" />
             <div>
               <div className="">
                 #{parseInt(block.number, 16)}</div>
