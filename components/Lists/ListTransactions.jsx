@@ -10,31 +10,31 @@ export default function ListTransactions({ transactions, transactionStatuses, tr
     <div className="space-y-3">
       {transactions.map((tx, i) => (
         <CardIndent key={i}>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               {transactionStatuses[tx.hash] === 'failed' ? (
                 <X className="w-4 h-4 text-rose-500" />
               ) : (
                 <ArrowLeftRight className="w-4 h-4 text-teal-500" />
               )}
-              <span className="">
-              <TextLink href={`/trx?hash=${tx.hash}`}>
-                <DisplayHash hash={tx.hash} />  
-              </TextLink>
-              </span>
+              <div>
+                Transaction
+              </div>
             </div>
+            {/* <TimeAgo timestamp={tx.timestamp} /> */}
+
             <div className="text-slate-600">
-              <TimeAgo timestamp={tx.timestamp} />
+              <DisplayHash hash={tx.hash} />  
             </div>
           </div>
           <div className="space-y-1">
             <div className="flex justify-between">
-              <span className="text-slate-600">From:</span>
-              <DisplayAddress address={tx.from} />
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-600">To:</span>
-              <DisplayAddress address={tx.to} />
+              <div className="">
+                <DisplayAddress address={tx.from} />
+              </div>
+              <div className="">
+                <DisplayAddress address={tx.to} rightIcon={true} />
+              </div>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-600">Value:</span>

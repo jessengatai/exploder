@@ -12,15 +12,27 @@ export function BlockchainProvider({ children }) {
   const wsRef = useRef(null)
   const processing = useRef(new Set())
   const validatedTransactions = useRef(new Set())
+  const loggedEvents = useRef(new Set())
 
   const addLog = (message, type = 'info') => {
-    const logEntry = {
-      id: Date.now() + Math.random(),
-      message,
-      type,
-      timestamp: Date.now()
+    const eventKey = `${message}-${type}`
+    
+    // Check if we've already logged this exact event
+    if (loggedEvents.current.has(eventKey)) {
+      return
     }
-    setLogs(prev => [logEntry, ...prev.slice(0, 49)]) // Keep last 50 logs
+    
+    loggedEvents.current.add(eventKey)
+    
+    setLogs(prev => {
+      const logEntry = {
+        id: Date.now() + Math.random(),
+        message,
+        type,
+        timestamp: Date.now()
+      }
+      return [logEntry, ...prev.slice(0, 49)] // Keep last 50 logs
+    })
   }
 
   useEffect(() => {
@@ -29,6 +41,10 @@ export function BlockchainProvider({ children }) {
       .then(config => setRpcUrl(config.rpcUrl))
       .catch(() => setRpcUrl('http://localhost:8545'))
       .then(() => {
+        // Clear any existing logs on fresh load
+        setLogs([])
+        loggedEvents.current.clear()
+        
         addLog('Blockchain context initialized', 'system')
         fetchRecentData()
         setupWebSocket()

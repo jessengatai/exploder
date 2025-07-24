@@ -15,7 +15,7 @@ export default function TimeAgo({ timestamp, className = 'text-xs' }) {
       
       if (diff < 60000) { // Less than 1 minute
         const seconds = Math.floor(diff / 1000)
-        if (seconds < 10) {
+        if (seconds < 5) {
           setTimeAgo('just now')
         } else {
           setTimeAgo(`${seconds} seconds ago`)
