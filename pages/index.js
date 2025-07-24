@@ -203,9 +203,7 @@ export default function Home() {
     }
   }
 
-  // Debug: Log transaction statuses
-  console.log('Transaction statuses:', transactionStatuses)
-  console.log('Display transactions:', displayItems.filter(item => item.type === 'transaction').slice(0, 10).map(tx => ({ hash: tx.hash, status: transactionStatuses[tx.hash] })))
+  
 
   return (
     <>

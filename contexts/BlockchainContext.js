@@ -1,19 +1,41 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 
+/**
+ * BlockchainContext - Centralized state management for blockchain data
+ * 
+ * This context provides real-time blockchain data including:
+ * - Recent blocks and transactions
+ * - Transaction statuses (success/failed)
+ * - Application logs
+ * - WebSocket connection management
+ * 
+ * The context handles both initial data loading and real-time updates
+ * via WebSocket subscriptions to new blocks and pending transactions.
+ */
 const BlockchainContext = createContext()
 
 export function BlockchainProvider({ children }) {
-  const [blocks, setBlocks] = useState([])
-  const [transactions, setTransactions] = useState([])
-  const [transactionStatuses, setTransactionStatuses] = useState({})
-  const [logs, setLogs] = useState([])
-  const [rpcUrl, setRpcUrl] = useState('http://localhost:8545')
-  const [isInitialized, setIsInitialized] = useState(false)
-  const wsRef = useRef(null)
-  const processing = useRef(new Set())
-  const validatedTransactions = useRef(new Set())
-  const loggedEvents = useRef(new Set())
+  // State for blockchain data
+  const [blocks, setBlocks] = useState([])                    // Recent blocks (last 10)
+  const [transactions, setTransactions] = useState([])        // Recent transactions (last 10)
+  const [transactionStatuses, setTransactionStatuses] = useState({})  // Success/failed status by tx hash
+  const [logs, setLogs] = useState([])                        // Application event logs
+  const [rpcUrl, setRpcUrl] = useState('http://localhost:8545') // Node RPC endpoint
+  const [isInitialized, setIsInitialized] = useState(false)   // Whether initial data is loaded
+  
+  // Refs for preventing duplicate processing and tracking state
+  const wsRef = useRef(null)                                  // WebSocket connection reference
+  const processing = useRef(new Set())                       // Track blocks being processed to prevent duplicates
+  const validatedTransactions = useRef(new Set())            // Track transactions that have been validated
+  const loggedEvents = useRef(new Set())                     // Track logged events to prevent duplicates
 
+  /**
+   * Add a log entry to the application logs
+   * Prevents duplicate log entries using eventKey tracking
+   * 
+   * @param {string} message - The log message
+   * @param {string} type - Log type: 'info', 'success', 'error', 'warning', 'pending', 'block', 'system'
+   */
   const addLog = (message, type = 'info') => {
     const eventKey = `${message}-${type}`
     
@@ -41,6 +63,10 @@ export function BlockchainProvider({ children }) {
     })
   }
 
+  /**
+   * Initialize the blockchain context
+   * Loads configuration, fetches initial data, and sets up WebSocket
+   */
   useEffect(() => {
     fetch('/config.json')
       .then(res => res.json())
@@ -59,6 +85,12 @@ export function BlockchainProvider({ children }) {
     }
   }, [])
 
+  /**
+   * Check the status of a specific transaction
+   * Fetches transaction receipt and updates status in state
+   * 
+   * @param {string} txHash - Transaction hash to check
+   */
   const checkTransactionStatus = async (txHash) => {
     try {
       const response = await fetch(rpcUrl, {
@@ -85,15 +117,22 @@ export function BlockchainProvider({ children }) {
           addLog(`Transaction ${txHash.slice(0, 8)}... succeeded`, 'success')
         }
       } else {
+        // Transaction receipt not found (might be pending)
       }
     } catch (error) {
       addLog(`Error checking transaction status: ${error.message}`, 'error')
     }
   }
 
+  /**
+   * Fetch recent blockchain data on initial load
+   * Gets the last 10 blocks and their transactions
+   */
   const fetchRecentData = async () => {
     try {
       addLog('Fetching recent blockchain data', 'info')
+      
+      // Get latest block number
       const latestBlockRes = await fetch(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -107,6 +146,7 @@ export function BlockchainProvider({ children }) {
       const latestBlockData = await latestBlockRes.json()
       const latestBlockNum = parseInt(latestBlockData.result, 16)
       
+      // Fetch last 10 blocks in parallel
       const blockPromises = []
       for (let i = 0; i < 10 && latestBlockNum - i >= 0; i++) {
         blockPromises.push(
@@ -127,10 +167,11 @@ export function BlockchainProvider({ children }) {
       const recentBlocks = blockResults
         .map(result => result.result)
         .filter(block => block)
-        .reverse()
+        .reverse() // Oldest to newest
       
       setBlocks(recentBlocks)
       
+      // Extract all transactions from blocks and add timestamps
       const allTransactions = []
       for (const block of recentBlocks) {
         if (block.transactions && block.transactions.length > 0) {
@@ -140,6 +181,8 @@ export function BlockchainProvider({ children }) {
             timestamp: blockTimestamp
           }))
           allTransactions.push(...transactionsWithTimestamp)
+          
+          // Mark transactions as validated (have complete data)
           block.transactions.forEach(tx => {
             if (tx.hash && tx.from && tx.to) {
               validatedTransactions.current.add(tx.hash)
@@ -148,7 +191,7 @@ export function BlockchainProvider({ children }) {
         }
       }
       
-      setTransactions(allTransactions.slice(0, 20))
+      setTransactions(allTransactions.slice(0, 10))
       setIsInitialized(true)
       addLog(`Loaded ${recentBlocks.length} blocks and ${allTransactions.length} transactions`, 'success')
     } catch (error) {
@@ -156,6 +199,10 @@ export function BlockchainProvider({ children }) {
     }
   }
 
+  /**
+   * Set up WebSocket connection for real-time updates
+   * Subscribes to new blocks and pending transactions
+   */
   const setupWebSocket = () => {
     if (wsRef.current) {
       wsRef.current.close()
@@ -167,6 +214,8 @@ export function BlockchainProvider({ children }) {
     
     ws.onopen = () => {
       addLog('WebSocket connected to node', 'success')
+      
+      // Subscribe to new blocks
       ws.send(JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
@@ -189,11 +238,11 @@ export function BlockchainProvider({ children }) {
         
         if (data.method === 'eth_subscription' && data.params.subscription) {
           if (data.params.result && typeof data.params.result === 'string') {
-            // Pending transaction
+            // Pending transaction notification
             const txHash = data.params.result
             addLog(`New pending transaction: ${txHash.slice(0, 8)}...`, 'pending')
           } else if (data.params.result && data.params.result.number) {
-            // New block
+            // New block notification
             const block = data.params.result
             addLog(`New block mined: #${parseInt(block.number, 16)}`, 'block')
             await updateBlock(block)
@@ -213,13 +262,21 @@ export function BlockchainProvider({ children }) {
     }
   }
 
+  /**
+   * Update blockchain data when a new block is received
+   * Fetches complete block data and processes transactions
+   * 
+   * @param {Object} blockData - Block header data from WebSocket
+   */
   const updateBlock = async (blockData) => {
+    // Prevent duplicate processing of the same block
     if (processing.current.has(blockData.hash)) {
       return
     }
     processing.current.add(blockData.hash)
     
     try {
+      // Fetch complete block data including transactions
       const response = await fetch(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -243,17 +300,23 @@ export function BlockchainProvider({ children }) {
       
       const validatedBlock = result.result
       
+      // Update blocks list
       setBlocks(prev => {
         const existing = prev.find(b => b.hash === validatedBlock.hash)
         if (existing) {
+          // Update existing block with complete data
           return prev.map(b => b.hash === validatedBlock.hash ? validatedBlock : b)
         } else {
+          // Add new block to the beginning
           return [validatedBlock, ...prev.slice(0, 9)]
         }
       })
       
+      // Process transactions in the block
       if (validatedBlock.transactions && validatedBlock.transactions.length > 0) {
         const blockTimestamp = parseInt(validatedBlock.timestamp, 16) * 1000
+        
+        // Filter for complete transactions (have all required fields)
         const completeTransactions = validatedBlock.transactions
           .filter(tx => tx.hash && tx.from && tx.to && tx.value !== undefined)
           .map(tx => ({
@@ -261,11 +324,13 @@ export function BlockchainProvider({ children }) {
             timestamp: blockTimestamp
           }))
         
+        // Mark transactions as validated and check their status
         completeTransactions.forEach(tx => {
           validatedTransactions.current.add(tx.hash)
           checkTransactionStatus(tx.hash)
         })
         
+        // Update transactions list
         setTransactions(prev => {
           const newTxs = completeTransactions.filter(tx => 
             !prev.find(existing => existing.hash === tx.hash)
@@ -282,6 +347,10 @@ export function BlockchainProvider({ children }) {
     }
   }
 
+  /**
+   * Filter transactions to only include those that have been validated
+   * (have complete data from block)
+   */
   const validatedTransactionsList = transactions.filter(tx => 
     validatedTransactions.current.has(tx.hash)
   )
@@ -301,6 +370,10 @@ export function BlockchainProvider({ children }) {
   )
 }
 
+/**
+ * Hook to access blockchain context data
+ * @returns {Object} Blockchain context data and functions
+ */
 export function useBlockchain() {
   return useContext(BlockchainContext)
 } 

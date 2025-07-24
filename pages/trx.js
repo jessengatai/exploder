@@ -58,16 +58,14 @@ export default function Transactions() {
         })
       })
       const result = await response.json()
-      console.log('Transaction receipt for', txHash, ':', result)
       
       if (result.result) {
         const status = result.result.status === '0x1' ? 'success' : 'failed'
-        console.log('Transaction status:', status)
         // Update the local state to show the correct status
         setTransaction(prev => prev ? { ...prev, status } : prev)
       }
     } catch (error) {
-      console.error('Error checking transaction status:', error)
+      // Error checking transaction status
     }
   }
 
