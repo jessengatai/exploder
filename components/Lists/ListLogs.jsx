@@ -8,9 +8,6 @@ export default function ListLogs({ logs }) {
           <div className="text-gray-300">
             {log.message}
           </div>
-          <div className="text-xs text-gray-500">
-            <TimeAgo timestamp={log.timestamp} />
-          </div>
         </div>
       ))}
       {logs.length === 0 && (

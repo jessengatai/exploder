@@ -41,10 +41,6 @@ export function BlockchainProvider({ children }) {
       .then(config => setRpcUrl(config.rpcUrl))
       .catch(() => setRpcUrl('http://localhost:8545'))
       .then(() => {
-        // Clear any existing logs on fresh load
-        setLogs([])
-        loggedEvents.current.clear()
-        
         addLog('Blockchain context initialized', 'system')
         fetchRecentData()
         setupWebSocket()

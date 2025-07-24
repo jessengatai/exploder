@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import jazzicon from '@metamask/jazzicon'
 
-export default function AddressIcon({ address, size = 16, className = '' }) {
+export default function AddressIcon({ address, size = 20, className = '' }) {
   const containerRef = useRef(null)
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function AddressIcon({ address, size = 16, className = '' }) {
   return (
     <div
       ref={containerRef}
-      className={`flex ${className}`}
+      className={`inline-block rounded ${className}`}
     />
   )
 } 
