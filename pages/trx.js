@@ -14,6 +14,7 @@ export default function Transactions() {
   const { rpcUrl, transactionStatuses } = useBlockchain()
   const [transaction, setTransaction] = useState(null)
   const [tokenTransfers, setTokenTransfers] = useState([])
+  const [functionInfo, setFunctionInfo] = useState(null)
 
   useEffect(() => {
     if (hash) {
@@ -39,6 +40,8 @@ export default function Transactions() {
         setTransaction(result.result)
         // Check transaction status
         checkTransactionStatus(txHash)
+        // Decode function information
+        decodeFunctionInfo(result.result)
       }
     } catch (error) {
       console.error('Error fetching transaction:', error)
@@ -67,6 +70,52 @@ export default function Transactions() {
     } catch (error) {
       // Error checking transaction status
     }
+  }
+
+  const decodeFunctionInfo = (tx) => {
+    if (!tx.input || tx.input === '0x' || tx.input.length < 10) {
+      setFunctionInfo(null)
+      return
+    }
+
+    const functionSelector = tx.input.slice(0, 10)
+    const functionName = getFunctionName(functionSelector)
+    
+    setFunctionInfo({
+      selector: functionSelector,
+      name: functionName,
+      rawInput: tx.input
+    })
+  }
+
+  const getFunctionName = (selector) => {
+    // Common function selectors database
+    const functionSelectors = {
+      '0xa9059cbb': 'transfer(address,uint256)',
+      '0x23b872dd': 'transferFrom(address,address,uint256)',
+      '0x095ea7b3': 'approve(address,uint256)',
+      '0x70a08231': 'balanceOf(address)',
+      '0x18160ddd': 'totalSupply()',
+      '0x06fdde03': 'name()',
+      '0x95d89b41': 'symbol()',
+      '0x313ce567': 'decimals()',
+      '0xd0e30db0': 'deposit()',
+      '0x2e1a7d4d': 'withdraw(uint256)',
+      '0x40c10f19': 'mint(address,uint256)',
+      '0x42966c68': 'burn(uint256)',
+      '0x8da5cb5b': 'owner()',
+      '0xf2fde38b': 'transferOwnership(address)',
+      '0x715018a6': 'renounceOwnership()',
+      '0x5c975abb': 'pause()',
+      '0x3f4ba83a': 'unpause()',
+      '0x5c11d795': 'swap(uint256,uint256,address,bytes)',
+      '0x38ed1739': 'swapExactTokensForTokens(uint256,uint256,address[],address,uint256)',
+      '0x7ff36ab5': 'swapExactETHForTokens(uint256,address[],address,uint256)',
+      '0x18cbafe5': 'swapExactTokensForETH(uint256,uint256,address[],address,uint256)',
+      // Add more as needed
+    }
+
+    return functionSelectors[selector] || 'Unknown Function'
   }
 
   if (!transaction) {
@@ -167,6 +216,12 @@ export default function Transactions() {
                 <span className="text-gray-400">Tx Type:</span>
                 <span>{transaction.to ? 'Contract Interaction' : 'Contract Creation'}</span>
               </div>
+              {functionInfo && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Function:</span>
+                  <span className="font-mono text-sm text-blue-400">{functionInfo.name}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-gray-400">Gas Price:</span>
                 <span>{transaction.gasPrice ? `${parseInt(transaction.gasPrice, 16)} Wei (0 ETH)` : '-'}</span>
@@ -184,8 +239,21 @@ export default function Transactions() {
           
           {transaction.input && transaction.input !== '0x' && (
             <div className="mt-8">
-              <h3 className="text-lg font-semibold mb-4">Raw Input</h3>
+              <h3 className="text-lg font-semibold mb-4">Transaction Input</h3>
+              {functionInfo && (
+                <div className="mb-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Function Selector:</span>
+                    <span className="font-mono text-sm text-blue-400">{functionInfo.selector}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Function Name:</span>
+                    <span className="font-mono text-sm text-green-400">{functionInfo.name}</span>
+                  </div>
+                </div>
+              )}
               <div className="bg-gray-900 p-4 rounded-lg">
+                <h4 className="text-sm font-semibold mb-2 text-gray-400">Raw Input Data:</h4>
                 <pre className="text-xs text-gray-300 break-all">{transaction.input}</pre>
               </div>
             </div>
