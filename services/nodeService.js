@@ -3,7 +3,7 @@
  * 
  * This service provides a standardized interface for:
  * - Fetching transactions and receipts
- * - Decoding function calls
+ * - Decoding function calls with 4byte.directory fallback
  * - Managing common RPC operations
  * - Caching frequently used data
  */
@@ -95,13 +95,13 @@ class NodeService {
   /**
    * Decode function information from transaction input
    */
-  decodeFunctionInfo(input) {
+  async decodeFunctionInfo(input) {
     if (!input || input === '0x' || input.length < 10) {
       return null
     }
 
     const selector = input.slice(0, 10)
-    const functionName = this.getFunctionName(selector)
+    const functionName = await this.getFunctionName(selector)
     
     return {
       selector,
@@ -113,9 +113,35 @@ class NodeService {
 
   /**
    * Get function name from selector
+   * First checks local database, then falls back to 4byte.directory
    */
-  getFunctionName(selector) {
-    // Common function selectors database
+  async getFunctionName(selector) {
+    // Check local database first (fast)
+    const localFunction = this.getLocalFunctionName(selector)
+    if (localFunction) return localFunction
+    
+    // Check cache for external lookups
+    if (this.functionCache.has(selector)) {
+      return this.functionCache.get(selector)
+    }
+    
+    // Fallback to 4byte.directory lookup
+    try {
+      const externalFunction = await this.lookupExternal(selector)
+      // Cache the result (even if null) to avoid repeated lookups
+      this.functionCache.set(selector, externalFunction)
+      return externalFunction
+    } catch (error) {
+      // Cache null result to avoid repeated failed lookups
+      this.functionCache.set(selector, null)
+      return null
+    }
+  }
+
+  /**
+   * Local function selectors database (fast lookup)
+   */
+  getLocalFunctionName(selector) {
     const functionSelectors = {
       '0xa9059cbb': 'transfer(address,uint256)',
       '0x23b872dd': 'transferFrom(address,address,uint256)',
@@ -149,6 +175,26 @@ class NodeService {
   }
 
   /**
+   * Lookup function signature from 4byte.directory
+   */
+  async lookupExternal(selector) {
+    try {
+      const response = await fetch(`https://www.4byte.directory/api/v1/signatures/?hex_signature=${selector}`)
+      if (!response.ok) return null
+      
+      const data = await response.json()
+      if (data.results && data.results.length > 0) {
+        // Return the most common signature (first result)
+        return data.results[0].text_signature
+      }
+      return null
+    } catch (error) {
+      console.error('4byte lookup failed:', error)
+      return null
+    }
+  }
+
+  /**
    * Get display-friendly function name
    */
   getDisplayName(functionSignature) {
@@ -175,7 +221,7 @@ class NodeService {
 
     // Decode function if there's input data
     if (tx.input && tx.input !== '0x' && tx.input.length > 2) {
-      analysis.functionInfo = this.decodeFunctionInfo(tx.input)
+      analysis.functionInfo = await this.decodeFunctionInfo(tx.input)
       analysis.type = analysis.functionInfo ? 'contract_interaction' : 'contract_creation'
     }
 

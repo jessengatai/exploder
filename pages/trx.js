@@ -7,6 +7,7 @@ import { Check, X, ExternalLink } from 'lucide-react'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import { useBlockchain } from '../contexts/BlockchainContext'
+import nodeService from '../services/nodeService'
 
 export default function Transactions() {
   const router = useRouter()
@@ -40,7 +41,7 @@ export default function Transactions() {
         setTransaction(result.result)
         // Check transaction status
         checkTransactionStatus(txHash)
-        // Decode function information
+        // Decode function information using nodeService
         decodeFunctionInfo(result.result)
       }
     } catch (error) {
@@ -72,50 +73,20 @@ export default function Transactions() {
     }
   }
 
-  const decodeFunctionInfo = (tx) => {
+  const decodeFunctionInfo = async (tx) => {
     if (!tx.input || tx.input === '0x' || tx.input.length < 10) {
       setFunctionInfo(null)
       return
     }
 
-    const functionSelector = tx.input.slice(0, 10)
-    const functionName = getFunctionName(functionSelector)
-    
-    setFunctionInfo({
-      selector: functionSelector,
-      name: functionName,
-      rawInput: tx.input
-    })
-  }
-
-  const getFunctionName = (selector) => {
-    // Common function selectors database
-    const functionSelectors = {
-      '0xa9059cbb': 'transfer(address,uint256)',
-      '0x23b872dd': 'transferFrom(address,address,uint256)',
-      '0x095ea7b3': 'approve(address,uint256)',
-      '0x70a08231': 'balanceOf(address)',
-      '0x18160ddd': 'totalSupply()',
-      '0x06fdde03': 'name()',
-      '0x95d89b41': 'symbol()',
-      '0x313ce567': 'decimals()',
-      '0xd0e30db0': 'deposit()',
-      '0x2e1a7d4d': 'withdraw(uint256)',
-      '0x40c10f19': 'mint(address,uint256)',
-      '0x42966c68': 'burn(uint256)',
-      '0x8da5cb5b': 'owner()',
-      '0xf2fde38b': 'transferOwnership(address)',
-      '0x715018a6': 'renounceOwnership()',
-      '0x5c975abb': 'pause()',
-      '0x3f4ba83a': 'unpause()',
-      '0x5c11d795': 'swap(uint256,uint256,address,bytes)',
-      '0x38ed1739': 'swapExactTokensForTokens(uint256,uint256,address[],address,uint256)',
-      '0x7ff36ab5': 'swapExactETHForTokens(uint256,address[],address,uint256)',
-      '0x18cbafe5': 'swapExactTokensForETH(uint256,uint256,address[],address,uint256)',
-      // Add more as needed
+    try {
+      // Use nodeService for function decoding with 4byte fallback
+      const decoded = await nodeService.decodeFunctionInfo(tx.input)
+      setFunctionInfo(decoded)
+    } catch (error) {
+      console.error('Error decoding function info:', error)
+      setFunctionInfo(null)
     }
-
-    return functionSelectors[selector] || 'Unknown Function'
   }
 
   if (!transaction) {
@@ -219,7 +190,7 @@ export default function Transactions() {
               {functionInfo && (
                 <div className="flex justify-between">
                   <span className="text-gray-400">Function:</span>
-                  <span className="font-mono text-sm text-blue-400">{functionInfo.name}</span>
+                  <span className="font-mono text-sm text-blue-400">{functionInfo.name || 'Unknown'}</span>
                 </div>
               )}
               <div className="flex justify-between">
@@ -248,8 +219,14 @@ export default function Transactions() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Function Name:</span>
-                    <span className="font-mono text-sm text-green-400">{functionInfo.name}</span>
+                    <span className="font-mono text-sm text-green-400">{functionInfo.name || 'Unknown'}</span>
                   </div>
+                  {functionInfo.displayName && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Display Name:</span>
+                      <span className="font-mono text-sm text-yellow-400">{functionInfo.displayName}</span>
+                    </div>
+                  )}
                 </div>
               )}
               <div className="bg-gray-900 p-4 rounded-lg">

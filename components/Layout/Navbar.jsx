@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react'
+import { Box, ForkKnife, GitBranch, GitFork, Search } from 'lucide-react'
 
 export default function Navbar({ nodeInfo }) {
   return (
@@ -15,14 +15,14 @@ export default function Navbar({ nodeInfo }) {
           
           {/* Node Info */}
           {nodeInfo && (
-            <div className="text-sm text-gray-400">
+            <div className="text-sm text-gray-400 flex items-center">
               {nodeInfo.forkInfo ? (
-                <span>Forking <span className="text-blue-300">{nodeInfo.forkInfo}</span></span>
+                <div className="ml-2 flex items-center gap-2"><GitFork className="w-4 h-4 text-indigo-500" /> <span>{nodeInfo.forkInfo}</span></div>
               ) : (
-                <span>Local Network</span>
+                <div className="ml-2 flex items-center gap-2">Local Network</div>
               )}
               {nodeInfo.latestBlock > 0 && (
-                <span className="ml-2">• Block #{nodeInfo.latestBlock.toLocaleString()}</span>
+                <div className="ml-2 flex items-center gap-2"><Box className="w-4 h-4 text-indigo-500" /> #{nodeInfo.latestBlock.toLocaleString()}</div>
               )}
             </div>
           )}
