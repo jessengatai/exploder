@@ -20,6 +20,7 @@ export function BlockchainProvider({ children }) {
   const [transactions, setTransactions] = useState([])        // Recent transactions (last 10)
   const [transactionStatuses, setTransactionStatuses] = useState({})  // Success/failed status by tx hash
   const [logs, setLogs] = useState([])                        // Application event logs
+  const [contracts, setContracts] = useState([])              // Deployed contracts (last 10)
   const [rpcUrl, setRpcUrl] = useState('http://localhost:8545') // Node RPC endpoint
   const [isInitialized, setIsInitialized] = useState(false)   // Whether initial data is loaded
   
@@ -183,9 +184,12 @@ export function BlockchainProvider({ children }) {
           allTransactions.push(...transactionsWithTimestamp)
           
           // Mark transactions as validated (have complete data)
+          // Include contract deployments (tx.to is null) and regular transactions
           block.transactions.forEach(tx => {
-            if (tx.hash && tx.from && tx.to) {
+            if (tx.hash && tx.from) {
               validatedTransactions.current.add(tx.hash)
+              // Check for contract deployments in initial data
+              checkForContractDeployment(tx)
             }
           })
         }
@@ -317,8 +321,9 @@ export function BlockchainProvider({ children }) {
         const blockTimestamp = parseInt(validatedBlock.timestamp, 16) * 1000
         
         // Filter for complete transactions (have all required fields)
+        // Include contract deployments (tx.to is null) and regular transactions
         const completeTransactions = validatedBlock.transactions
-          .filter(tx => tx.hash && tx.from && tx.to && tx.value !== undefined)
+          .filter(tx => tx.hash && tx.from && tx.value !== undefined)
           .map(tx => ({
             ...tx,
             timestamp: blockTimestamp
@@ -328,6 +333,8 @@ export function BlockchainProvider({ children }) {
         completeTransactions.forEach(tx => {
           validatedTransactions.current.add(tx.hash)
           checkTransactionStatus(tx.hash)
+          // Check for contract deployments
+          checkForContractDeployment(tx)
         })
         
         // Update transactions list
@@ -355,13 +362,67 @@ export function BlockchainProvider({ children }) {
     validatedTransactions.current.has(tx.hash)
   )
 
+  /**
+   * Check if a transaction is a contract deployment
+   * If so, fetch the contract address and add it to the contracts list
+   */
+  const checkForContractDeployment = async (tx) => {
+    // Check for contract deployment: tx.to is null/undefined and has input data
+    if ((tx.to === null || tx.to === undefined) && tx.input && tx.input !== '0x' && tx.input.length > 2) {
+      try {
+        const response = await fetch(rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'eth_getTransactionReceipt',
+            params: [tx.hash]
+          })
+        })
+        const result = await response.json()
+        
+        if (result.result && result.result.status === '0x1' && result.result.contractAddress) {
+          const contractInfo = {
+            address: result.result.contractAddress,
+            deployer: tx.from,
+            transactionHash: tx.hash,
+            blockNumber: parseInt(result.result.blockNumber, 16),
+            timestamp: tx.timestamp || Date.now()
+          }
+          
+          addContract(contractInfo)
+        }
+      } catch (error) {
+        addLog(`Error checking contract deployment: ${error.message}`, 'error')
+      }
+    }
+  }
+
+  /**
+   * Add a contract to the contracts list
+   * Prevents duplicate contracts and maintains a list of the last 10
+   */
+  const addContract = (contractInfo) => {
+    setContracts(prev => {
+      // Check if contract already exists
+      if (!prev.find(c => c.address === contractInfo.address)) {
+        addLog(`Contract deployed: ${contractInfo.address.slice(0, 8)}...`, 'success')
+        return [contractInfo, ...prev.slice(0, 9)]
+      }
+      return prev
+    })
+  }
+
   return (
     <BlockchainContext.Provider value={{ 
       blocks, 
       transactions: validatedTransactionsList, 
       transactionStatuses,
       logs,
+      contracts,
       addLog,
+      addContract,
       rpcUrl,
       isInitialized 
     }}>

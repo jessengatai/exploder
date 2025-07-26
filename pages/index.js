@@ -1,5 +1,5 @@
 import Head from 'next/head'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Card from '../components/ui/Card'
 import ListBlocks from '../components/Lists/ListBlocks'
 import ListTransactions from '../components/Lists/ListTransactions'
@@ -9,14 +9,12 @@ import { useBlockchain } from '../contexts/BlockchainContext'
 import { getTransactionFailureReason } from '../utils/nodeDetector'
 
 export default function Home() {
-  const { blocks, transactions, transactionStatuses, logs, rpcUrl } = useBlockchain()
+  const { blocks, transactions, transactionStatuses, logs, contracts, rpcUrl } = useBlockchain()
   const [transactionDetails, setTransactionDetails] = useState({})
-  const [contracts, setContracts] = useState([])
 
   useEffect(() => {
     if (transactions.length > 0) {
       analyzeTransactions(transactions, rpcUrl)
-      checkForContractDeployments(transactions, rpcUrl)
     }
   }, [transactions, rpcUrl])
 
@@ -57,7 +55,7 @@ export default function Home() {
   allItems.sort((a, b) => b.timestamp - a.timestamp)
   const displayItems = allItems.slice(0, 50)
 
-  const analyzeTransactions = async (txs, url) => {
+  const analyzeTransactions = useCallback(async (txs, url) => {
     const details = {}
     
     for (const tx of txs) {
@@ -101,7 +99,7 @@ export default function Home() {
     }
     
     setTransactionDetails(details)
-  }
+  }, [])
 
   const getTokenInfo = async (tokenAddress, url) => {
     try {
@@ -162,48 +160,7 @@ export default function Home() {
     }
   }
 
-  const checkForContractDeployments = async (txs, url) => {
-    for (const tx of txs) {
-      if (!tx || !tx.hash) continue
-      
-      if (!tx.to && tx.input && tx.input !== '0x' && tx.input.length > 2) {
-        try {
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: 1,
-              method: 'eth_getTransactionReceipt',
-              params: [tx.hash]
-            })
-          })
-          const result = await response.json()
-          
-          if (result.result && result.result.status === '0x1' && result.result.contractAddress) {
-            const contractInfo = {
-              address: result.result.contractAddress,
-              deployer: tx.from,
-              transactionHash: tx.hash,
-              blockNumber: parseInt(result.result.blockNumber, 16),
-              timestamp: Date.now()
-            }
-            
-            setContracts(prev => {
-              if (!prev.find(c => c.address === contractInfo.address)) {
-                return [contractInfo, ...prev.slice(0, 9)]
-              }
-              return prev
-            })
-          }
-        } catch (error) {
-          console.error('Error checking contract deployment:', error)
-        }
-      }
-    }
-  }
 
-  
 
   return (
     <>
@@ -222,7 +179,10 @@ export default function Home() {
           <Card className='border-0 border-r-1'>
             <h2 className="text-xl font-bold mb-4">Transactions</h2>
             <ListTransactions 
-              transactions={displayItems.filter(item => item.type === 'transaction').slice(0, 10)}
+              transactions={displayItems.filter(item => 
+                item.type === 'transaction' && 
+                !(item.to === null || item.to === undefined)
+              ).slice(0, 10)}
               transactionStatuses={transactionStatuses}
               transactionDetails={transactionDetails}
             />

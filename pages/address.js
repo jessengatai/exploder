@@ -518,9 +518,13 @@ export default function Address() {
                         </div>
                         <div>
                           <span className="text-gray-400">To: </span>
-                          <Link href={`/address?address=${tx.to}`} className="text-blue-400 hover:text-blue-300">
-                            {tx.to.substring(0, 8)}...{tx.to.substring(tx.to.length - 4)}
-                          </Link>
+                          {tx.to ? (
+                            <Link href={`/address?address=${tx.to}`} className="text-blue-400 hover:text-blue-300">
+                              {tx.to.substring(0, 8)}...{tx.to.substring(tx.to.length - 4)}
+                            </Link>
+                          ) : (
+                            <span className="text-gray-400">Contract Creation</span>
+                          )}
                         </div>
                         <div>
                           <span className="text-gray-400">Value: </span>

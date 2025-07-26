@@ -3,7 +3,7 @@ export default function ListLogs({ logs }) {
     <div className="space-y-1 text-sm">
       {logs.map((log) => (
         <div key={log.id} className="py-1">
-          <div className="text-gray-300">
+          <div className="text-slate-500">
             {log.message}
           </div>
         </div>
