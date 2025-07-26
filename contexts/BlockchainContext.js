@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
+import nodeService from '../services/nodeService'
 
 /**
  * BlockchainContext - Centralized state management for blockchain data
@@ -19,6 +20,7 @@ export function BlockchainProvider({ children }) {
   const [blocks, setBlocks] = useState([])                    // Recent blocks (last 10)
   const [transactions, setTransactions] = useState([])        // Recent transactions (last 10)
   const [transactionStatuses, setTransactionStatuses] = useState({})  // Success/failed status by tx hash
+  const [transactionAnalysis, setTransactionAnalysis] = useState({})  // Function analysis by tx hash
   const [logs, setLogs] = useState([])                        // Application event logs
   const [contracts, setContracts] = useState([])              // Deployed contracts (last 10)
   const [rpcUrl, setRpcUrl] = useState('http://localhost:8545') // Node RPC endpoint
@@ -71,8 +73,14 @@ export function BlockchainProvider({ children }) {
   useEffect(() => {
     fetch('/config.json')
       .then(res => res.json())
-      .then(config => setRpcUrl(config.rpcUrl))
-      .catch(() => setRpcUrl('http://localhost:8545'))
+      .then(config => {
+        setRpcUrl(config.rpcUrl)
+        nodeService.setRpcUrl(config.rpcUrl)
+      })
+      .catch(() => {
+        setRpcUrl('http://localhost:8545')
+        nodeService.setRpcUrl('http://localhost:8545')
+      })
       .then(() => {
         addLog('Blockchain context initialized', 'system')
         fetchRecentData()
@@ -190,6 +198,8 @@ export function BlockchainProvider({ children }) {
               validatedTransactions.current.add(tx.hash)
               // Check for contract deployments in initial data
               checkForContractDeployment(tx)
+              // Analyze transaction for function info
+              analyzeTransactionFunction(tx)
             }
           })
         }
@@ -330,11 +340,13 @@ export function BlockchainProvider({ children }) {
           }))
         
         // Mark transactions as validated and check their status
-        completeTransactions.forEach(tx => {
+        completeTransactions.forEach(async (tx) => {
           validatedTransactions.current.add(tx.hash)
           checkTransactionStatus(tx.hash)
           // Check for contract deployments
           checkForContractDeployment(tx)
+          // Analyze transaction for function info
+          analyzeTransactionFunction(tx)
         })
         
         // Update transactions list
@@ -366,7 +378,7 @@ export function BlockchainProvider({ children }) {
    * Check if a transaction is a contract deployment
    * If so, fetch the contract address and add it to the contracts list
    */
-  const checkForContractDeployment = async (tx) => {
+    const checkForContractDeployment = async (tx) => {
     // Check for contract deployment: tx.to is null/undefined and has input data
     if ((tx.to === null || tx.to === undefined) && tx.input && tx.input !== '0x' && tx.input.length > 2) {
       try {
@@ -383,12 +395,36 @@ export function BlockchainProvider({ children }) {
         const result = await response.json()
         
         if (result.result && result.result.status === '0x1' && result.result.contractAddress) {
+          let timestamp = tx.timestamp
+          
+          // If we don't have timestamp, fetch it from the block
+          if (!timestamp) {
+            try {
+              const blockResponse = await fetch(rpcUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  jsonrpc: '2.0',
+                  id: 2,
+                  method: 'eth_getBlockByNumber',
+                  params: [result.result.blockNumber, false]
+                })
+              })
+              const blockResult = await blockResponse.json()
+              if (blockResult.result && blockResult.result.timestamp) {
+                timestamp = parseInt(blockResult.result.timestamp, 16) * 1000
+              }
+            } catch (error) {
+              timestamp = Date.now() // Fallback to current time
+            }
+          }
+          
           const contractInfo = {
             address: result.result.contractAddress,
             deployer: tx.from,
             transactionHash: tx.hash,
             blockNumber: parseInt(result.result.blockNumber, 16),
-            timestamp: tx.timestamp || Date.now()
+            timestamp: timestamp
           }
           
           addContract(contractInfo)
@@ -396,6 +432,26 @@ export function BlockchainProvider({ children }) {
       } catch (error) {
         addLog(`Error checking contract deployment: ${error.message}`, 'error')
       }
+    }
+  }
+
+  /**
+   * Analyze transaction for function information
+   */
+  const analyzeTransactionFunction = async (tx) => {
+    if (!tx.hash || !tx.input || tx.input === '0x') return
+    
+    try {
+      const analysis = await nodeService.analyzeTransaction(tx)
+      
+      if (analysis.functionInfo) {
+        setTransactionAnalysis(prev => ({
+          ...prev,
+          [tx.hash]: analysis
+        }))
+      }
+    } catch (error) {
+      // Silent fail for function analysis
     }
   }
 
@@ -419,6 +475,7 @@ export function BlockchainProvider({ children }) {
       blocks, 
       transactions: validatedTransactionsList, 
       transactionStatuses,
+      transactionAnalysis,
       logs,
       contracts,
       addLog,

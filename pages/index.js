@@ -9,7 +9,7 @@ import { useBlockchain } from '../contexts/BlockchainContext'
 import { getTransactionFailureReason } from '../utils/nodeDetector'
 
 export default function Home() {
-  const { blocks, transactions, transactionStatuses, logs, contracts, rpcUrl } = useBlockchain()
+  const { blocks, transactions, transactionStatuses, transactionAnalysis, logs, contracts, rpcUrl } = useBlockchain()
   const [transactionDetails, setTransactionDetails] = useState({})
 
   useEffect(() => {
@@ -185,6 +185,7 @@ export default function Home() {
               ).slice(0, 10)}
               transactionStatuses={transactionStatuses}
               transactionDetails={transactionDetails}
+              transactionAnalysis={transactionAnalysis}
             />
           </Card>
 

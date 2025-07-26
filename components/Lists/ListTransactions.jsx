@@ -5,7 +5,7 @@ import DisplayAddress from '../ui/DisplayAddress'
 import DisplayHash from '../ui/DisplayHash'
 import CardIndent from '../ui/CardIndent'
 
-export default function ListTransactions({ transactions, transactionStatuses, transactionDetails }) {
+export default function ListTransactions({ transactions, transactionStatuses, transactionDetails, transactionAnalysis }) {
   return (
     <div className="space-y-3">
       {transactions.map((tx, i) => (
@@ -18,7 +18,7 @@ export default function ListTransactions({ transactions, transactionStatuses, tr
                 <ArrowLeftRight className="w-4 h-4 text-teal-500" />
               )}
               <div>
-                Transaction
+                {transactionAnalysis[tx.hash]?.functionInfo?.displayName || 'Transaction'}
               </div>
             </div>
             <TimeAgo timestamp={tx.timestamp} />
