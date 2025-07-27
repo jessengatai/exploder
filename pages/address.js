@@ -2,12 +2,14 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import { Wallet, ExternalLink, Hash, Calendar, Activity, Coins } from 'lucide-react'
+import { Wallet, ExternalLink, Hash, Calendar, Activity, Coins, Code, Settings, FileText, Zap, Shield } from 'lucide-react'
 import AddressIcon from '../components/AddressIcon'
 
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import ContractCode from '../components/ui/ContractCode'
+import ContractVerification from '../components/ui/ContractVerification'
+import ContractInteraction from '../components/ui/ContractInteraction'
 import { checkContractVerification, getExplorerContractUrl } from '../utils/contractVerifier'
 
 export default function Address() {
@@ -21,6 +23,8 @@ export default function Address() {
   const [tokens, setTokens] = useState([])
   const [tokenBalances, setTokenBalances] = useState([])
   const [contractInfo, setContractInfo] = useState(null)
+  const [contractAnalysis, setContractAnalysis] = useState(null)
+  const [userVerification, setUserVerification] = useState(null)
 
   useEffect(() => {
     if (!actualAddress) return
@@ -92,23 +96,24 @@ export default function Address() {
       })
       const blockData = await blockRes.json()
       
+      const isContract = codeData.result && codeData.result !== '0x'
+      
       setAddressInfo({
         balance: balanceData.result ? (parseInt(balanceData.result, 16) / 1e18).toFixed(4) : '0',
         nonce: nonceData.result ? parseInt(nonceData.result, 16) : 0,
-        isContract: codeData.result && codeData.result !== '0x',
-        latestBlock: blockData.result ? parseInt(blockData.result, 16) : 0
+        isContract: isContract,
+        latestBlock: blockData.result ? parseInt(blockData.result, 16) : 0,
+        bytecodeSize: isContract ? (codeData.result.length - 2) / 2 : 0
       })
       
       // Fetch recent transactions involving this address
       fetchRecentTransactions(addr, url, blockData.result ? parseInt(blockData.result, 16) : 0)
       
-      // Check for tokens if this is a contract
-      if (codeData.result && codeData.result !== '0x') {
-        checkForTokens(addr, url)
-        
-        // Check contract verification
-        const verification = await checkContractVerification(addr, chain, url)
-        setContractInfo(verification)
+      // Enhanced contract analysis if this is a contract
+      if (isContract) {
+        // Check for user verification first
+        checkUserVerification(addr)
+        await performEnhancedContractAnalysis(addr, url)
       }
       
       // Check for token balances this address holds
@@ -116,6 +121,154 @@ export default function Address() {
     } catch (error) {
       console.error('Error fetching address data:', error)
     }
+  }
+
+  const performEnhancedContractAnalysis = async (addr, url) => {
+    try {
+      // Get comprehensive contract verification
+      const verification = await checkContractVerification(addr, null, url)
+      setContractInfo(verification)
+      
+      if (verification && verification.analysis) {
+        setContractAnalysis(verification.analysis)
+        
+        // If we found a token name, set it in tokens array for compatibility
+        if (verification.analysis.contractName && verification.analysis.contractType === 'Token') {
+          const tokenInfo = await getTokenDetails(addr, url)
+          if (tokenInfo) {
+            setTokens([{
+              address: addr,
+              name: verification.analysis.contractName,
+              symbol: tokenInfo.symbol || 'UNKNOWN',
+              decimals: tokenInfo.decimals || 18,
+              totalSupply: tokenInfo.totalSupply || '0'
+            }])
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error performing contract analysis:', error)
+    }
+  }
+
+  const getTokenDetails = async (addr, url) => {
+    try {
+      const [symbolRes, decimalsRes, totalSupplyRes] = await Promise.all([
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'eth_call',
+            params: [{ to: addr, data: '0x95d89b41' }, 'latest']
+          })
+        }),
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 2,
+            method: 'eth_call',
+            params: [{ to: addr, data: '0x313ce567' }, 'latest']
+          })
+        }),
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 3,
+            method: 'eth_call',
+            params: [{ to: addr, data: '0x18160ddd' }, 'latest']
+          })
+        })
+      ])
+
+      const [symbolData, decimalsData, totalSupplyData] = await Promise.all([
+        symbolRes.json(),
+        decimalsRes.json(),
+        totalSupplyRes.json()
+      ])
+
+      const decimals = decimalsData.result && decimalsData.result !== '0x' ? 
+        parseInt(decimalsData.result, 16) : 18
+      
+      return {
+        symbol: symbolData.result && symbolData.result !== '0x' ? 
+          decodeString(symbolData.result) : null,
+        decimals: decimals,
+        totalSupply: totalSupplyData.result && totalSupplyData.result !== '0x' ?
+          (parseInt(totalSupplyData.result, 16) / Math.pow(10, decimals)).toFixed(2) : '0'
+      }
+    } catch (error) {
+      return null
+    }
+  }
+
+  const checkUserVerification = (addr) => {
+    try {
+      const verifications = JSON.parse(localStorage.getItem('contractVerifications') || '{}')
+      const verification = verifications[addr]
+      if (verification) {
+        setUserVerification(verification)
+      }
+    } catch (error) {
+      console.error('Error checking user verification:', error)
+    }
+  }
+
+  const handleVerificationComplete = (verificationData) => {
+    setUserVerification(verificationData)
+    // Update contract info with user-provided data
+    if (contractInfo) {
+      setContractInfo({
+        ...contractInfo,
+        contractName: verificationData.contractName,
+        compilerVersion: verificationData.compilerVersion,
+        optimization: verificationData.optimizationEnabled ? 'Enabled' : 'Disabled',
+        runs: verificationData.optimizationRuns,
+        sourceCode: verificationData.sourceCode,
+        abi: JSON.stringify(verificationData.abi || [], null, 2),
+        userVerified: true
+      })
+    }
+    
+    // Update contract analysis with user data
+    if (contractAnalysis) {
+      setContractAnalysis({
+        ...contractAnalysis,
+        contractName: verificationData.contractName,
+        abi: verificationData.abi || contractAnalysis.abi
+      })
+    }
+  }
+
+  const getFunctionNameFromSelector = (selector, abi) => {
+    if (!abi) return null
+    
+    try {
+      const abiArray = typeof abi === 'string' ? JSON.parse(abi) : abi
+      const func = abiArray.find(item => {
+        if (item.type === 'function') {
+          // Calculate function selector (first 4 bytes of keccak256 hash)
+          const signature = `${item.name}(${item.inputs.map(input => input.type).join(',')})`
+          // For now, just match by name since we don't have keccak256 in browser
+          return signature.includes(item.name)
+        }
+        return false
+      })
+      
+      if (func) {
+        const params = func.inputs.map(input => `${input.type} ${input.name || ''}`).join(', ')
+        return `${func.name}(${params})`
+      }
+    } catch (error) {
+      console.error('Error parsing ABI for function names:', error)
+    }
+    
+    return null
   }
 
   const fetchRecentTransactions = async (addr, url, latestBlock) => {
@@ -156,144 +309,43 @@ export default function Address() {
     }
   }
 
-  const checkForTokens = async (addr, url) => {
-    try {
-      // Check if this contract has ERC20 functions
-      const tokenPromises = []
-      
-      // Check for name() function
-      tokenPromises.push(
-        fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'eth_call',
-            params: [{
-              to: addr,
-              data: '0x06fdde03' // name() function selector
-            }, 'latest']
-          })
-        }).then(res => res.json())
-      )
-      
-      // Check for symbol() function
-      tokenPromises.push(
-        fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 2,
-            method: 'eth_call',
-            params: [{
-              to: addr,
-              data: '0x95d89b41' // symbol() function selector
-            }, 'latest']
-          })
-        }).then(res => res.json())
-      )
-      
-      // Check for decimals() function
-      tokenPromises.push(
-        fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 3,
-            method: 'eth_call',
-            params: [{
-              to: addr,
-              data: '0x313ce567' // decimals() function selector
-            }, 'latest']
-          })
-        }).then(res => res.json())
-      )
-      
-      // Check for totalSupply() function
-      tokenPromises.push(
-        fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 4,
-            method: 'eth_call',
-            params: [{
-              to: addr,
-              data: '0x18160ddd' // totalSupply() function selector
-            }, 'latest']
-          })
-        }).then(res => res.json())
-      )
-      
-      const tokenResults = await Promise.all(tokenPromises)
-      
-      // If we get valid responses for name and symbol, it's likely a token
-      const nameResult = tokenResults[0]
-      const symbolResult = tokenResults[1]
-      const decimalsResult = tokenResults[2]
-      const totalSupplyResult = tokenResults[3]
-      
-      if (nameResult.result && symbolResult.result && 
-          nameResult.result !== '0x' && symbolResult.result !== '0x') {
-        
-        // Decode the name and symbol from hex
-        const name = decodeString(nameResult.result)
-        const symbol = decodeString(symbolResult.result)
-        const decimals = decimalsResult.result ? parseInt(decimalsResult.result, 16) : 18
-        const totalSupply = totalSupplyResult.result ? 
-          (parseInt(totalSupplyResult.result, 16) / Math.pow(10, decimals)).toFixed(2) : '0'
-        
-        setTokens([{
-          address: addr,
-          name: name,
-          symbol: symbol,
-          decimals: decimals,
-          totalSupply: totalSupply
-        }])
-      }
-    } catch (error) {
-      console.error('Error checking for tokens:', error)
-    }
-  }
-
   const decodeString = (hexString) => {
     try {
-      // Remove '0x' prefix and convert hex to string
       const hex = hexString.slice(2)
-      let str = ''
-      for (let i = 0; i < hex.length; i += 2) {
-        const charCode = parseInt(hex.substr(i, 2), 16)
-        if (charCode === 0) break // Stop at null terminator
-        str += String.fromCharCode(charCode)
-      }
-      return str
+      const dataStart = 128
+      if (hex.length <= dataStart) return null
+      
+      const lengthHex = hex.slice(64, 128)
+      const length = parseInt(lengthHex, 16)
+      
+      if (length === 0 || length > 100) return null
+      
+      const stringHex = hex.slice(dataStart, dataStart + (length * 2))
+      const bytes = stringHex.match(/.{2}/g).map(byte => parseInt(byte, 16))
+      
+      return String.fromCharCode(...bytes).replace(/\0/g, '')
     } catch (error) {
-      return 'Unknown'
+      return null
     }
   }
 
   const checkTokenBalances = async (addr, url) => {
     try {
-      // Common token addresses to check (you can add more)
       const commonTokens = [
         {
-          address: '0xA0b86a33E6441b8c4C8C8C8C8C8C8C8C8C8C8C8', // USDC on Base
+          address: '0xA0b86a33E6441b8c4C8C8C8C8C8C8C8C8C8C8C8',
           name: 'USD Coin',
           symbol: 'USDC',
           decimals: 6
         },
         {
-          address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base
+          address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
           name: 'USD Coin',
           symbol: 'USDC',
           decimals: 6
         },
         {
-          address: '0x4200000000000000000000000000000000000006', // WETH on Base
+          address: '0x4200000000000000000000000000000000000006',
           name: 'Wrapped Ether',
           symbol: 'WETH',
           decimals: 18
@@ -310,7 +362,7 @@ export default function Address() {
             method: 'eth_call',
             params: [{
               to: token.address,
-              data: `0x70a08231${'0'.repeat(24)}${addr.slice(2)}` // balanceOf(address) function
+              data: `0x70a08231${'0'.repeat(24)}${addr.slice(2)}`
             }, 'latest']
           })
         }).then(res => res.json())
@@ -346,6 +398,7 @@ export default function Address() {
       <Head>
         <title>Address - Exploder</title>
         <meta name="description" content="View address details" />
+        <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
       </Head>
 
       <main className="container mx-auto px-4 py-8">
@@ -374,7 +427,15 @@ export default function Address() {
                     <span className="text-gray-400">Type:</span>
                     <div className="flex items-center gap-2">
                       <Activity className="w-4 h-4 text-blue-500" />
-                      <span>{addressInfo.isContract ? 'Contract' : 'EOA'}</span>
+                      <span>
+                        {addressInfo.isContract 
+                          ? (contractAnalysis?.contractType || 'Contract')
+                          : 'EOA'
+                        }
+                        {contractAnalysis?.contractName && (
+                          <span className="text-gray-400 ml-2">({contractAnalysis.contractName})</span>
+                        )}
+                      </span>
                     </div>
                   </div>
                   <div className="flex justify-between">
@@ -404,7 +465,7 @@ export default function Address() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Contract Code:</span>
-                    <span>{addressInfo.isContract ? 'Yes' : 'No'}</span>
+                    <span>{addressInfo.isContract ? `Yes (${addressInfo.bytecodeSize} bytes)` : 'No'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Created:</span>
@@ -413,6 +474,128 @@ export default function Address() {
                 </div>
               </div>
             </Card>
+
+            {/* Enhanced Contract Analysis */}
+            {contractAnalysis && (
+              <Card className="mt-8">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Code className="w-5 h-5 text-purple-500" />
+                  Contract Analysis
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-blue-400 flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Basic Info
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Name:</span>
+                        <div className="flex items-center gap-2">
+                          <span>{userVerification?.contractName || contractAnalysis.contractName || 'Unknown'}</span>
+                          {userVerification && (
+                            <span className="text-xs bg-green-900 text-green-300 px-2 py-1 rounded">
+                              User Verified
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Type:</span>
+                        <span className="text-green-400">{contractAnalysis.contractType}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Functions:</span>
+                        <span>{contractAnalysis.functionSelectors?.length || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-orange-400 flex items-center gap-2">
+                      <Settings className="w-4 h-4" />
+                      Compiler
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Version:</span>
+                        <span>{contractAnalysis.compilerVersion || 'Unknown'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Optimization:</span>
+                        <span className={contractAnalysis.optimization === 'Enabled' ? 'text-green-400' : 'text-gray-400'}>
+                          {contractAnalysis.optimization || 'Unknown'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Runs:</span>
+                        <span>{contractAnalysis.optimizationRuns || 'Unknown'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-cyan-400 flex items-center gap-2">
+                      <Shield className="w-4 h-4" />
+                      Metadata
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">IPFS Hash:</span>
+                        <span className="font-mono text-xs">
+                          {contractAnalysis.metadata?.ipfsHash ? 
+                            `${contractAnalysis.metadata.ipfsHash.slice(0, 8)}...` : 
+                            'None'
+                          }
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">ABI Functions:</span>
+                        <span>{contractAnalysis.abi?.length || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Function Selectors */}
+                {contractAnalysis.functionSelectors && contractAnalysis.functionSelectors.length > 0 && (
+                  <div className="mt-6">
+                    <h4 className="font-medium text-yellow-400 mb-3 flex items-center gap-2">
+                      <Zap className="w-4 h-4" />
+                      Function Selectors ({contractAnalysis.functionSelectors.length})
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {contractAnalysis.functionSelectors.map((selector, i) => {
+                        // Try to get function name from ABI if available
+                        const functionName = getFunctionNameFromSelector(selector, userVerification?.abi || contractAnalysis.abi)
+                        return (
+                          <div key={i} className="bg-gray-900 p-3 rounded">
+                            <div className="text-xs font-mono text-blue-300">{selector}</div>
+                            {functionName && (
+                              <div className="text-xs text-gray-400 mt-1">{functionName}</div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Generated ABI Preview */}
+                {contractAnalysis.abi && contractAnalysis.abi.length > 0 && (
+                  <div className="mt-6">
+                    <h4 className="font-medium text-green-400 mb-3">Generated ABI Preview</h4>
+                    <div className="bg-gray-900 p-3 rounded text-xs font-mono max-h-40 overflow-y-auto">
+                      {contractAnalysis.abi.map((func, i) => (
+                        <div key={i} className="text-green-300">
+                          function {func.name}({func.inputs?.map(input => input.type).join(', ')})
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            )}
             
             {tokenBalances.length > 0 && (
               <Card className="mt-8">
@@ -486,12 +669,27 @@ export default function Address() {
             )}
             
             {addressInfo?.isContract && (
-              <Card className="mt-8">
-                <ContractCode 
-                  contractInfo={contractInfo} 
-                  explorerUrl={null}
+              <>
+                <div className="mt-8">
+                  <ContractVerification 
+                    contractAddress={actualAddress}
+                    onVerificationComplete={handleVerificationComplete}
+                  />
+                </div>
+                
+                <Card className="mt-8">
+                  <ContractCode 
+                    contractInfo={contractInfo} 
+                    explorerUrl={null}
+                  />
+                </Card>
+
+                <ContractInteraction 
+                  contractAddress={actualAddress}
+                  contractABI={userVerification?.abi || contractAnalysis?.abi || contractInfo?.abi}
+                  userVerification={userVerification}
                 />
-              </Card>
+              </>
             )}
             
             {transactions.length > 0 && (

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import nodeService from '../services/nodeService'
+import { checkContractVerification } from '../utils/contractVerifier'
 
 /**
  * BlockchainContext - Centralized state management for blockchain data
@@ -419,12 +420,17 @@ export function BlockchainProvider({ children }) {
             }
           }
           
+          // Analyze the deployed contract to get its name and type
+          const contractAnalysis = await analyzeDeployedContract(result.result.contractAddress)
+          
           const contractInfo = {
             address: result.result.contractAddress,
             deployer: tx.from,
             transactionHash: tx.hash,
             blockNumber: parseInt(result.result.blockNumber, 16),
-            timestamp: timestamp
+            timestamp: timestamp,
+            name: contractAnalysis?.contractName || null,
+            type: contractAnalysis?.contractType || 'Contract'
           }
           
           addContract(contractInfo)
@@ -452,6 +458,19 @@ export function BlockchainProvider({ children }) {
       }
     } catch (error) {
       // Silent fail for function analysis
+    }
+  }
+
+  /**
+   * Analyze a deployed contract to extract name and type
+   */
+  const analyzeDeployedContract = async (contractAddress) => {
+    try {
+      const contractData = await checkContractVerification(contractAddress, null, rpcUrl)
+      return contractData.analysis
+    } catch (error) {
+      addLog(`Error analyzing contract ${contractAddress.slice(0, 8)}...: ${error.message}`, 'error')
+      return null
     }
   }
 
