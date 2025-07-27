@@ -10,19 +10,22 @@ export default function ListContracts({ contracts }) {
     <div className="space-y-3">
       {contracts.map((contract, i) => (
         <CardIndent key={i}>  
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Check className="w-4 h-4 text-emerald-500" />
-              <span className="">
+              <div className="flex flex-col">
                 <TextLink href={`/address?address=${contract.address}`}>
                   <DisplayAddress address={contract.address} />
                 </TextLink>
-              </span>
-            </div>
-            <div className="text-slate-600">
-              <TimeAgo timestamp={contract.timestamp} />
+                {contract.name && (
+                  <div className="text-xs text-slate-400 mt-1">
+                    {contract.name} ({contract.type})
+                  </div>
+                )}
+              </div>
             </div>
           </div>
+
           <div className="space-y-1">
             <div className="flex justify-between">
               <span className="text-slate-600">Deployed by:</span>
@@ -37,6 +40,13 @@ export default function ListContracts({ contracts }) {
             <div className="flex justify-between">
               <span className="text-slate-600">Block:</span>
               <span>#{contract.blockNumber}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div></div>
+            <div className="text-slate-600">
+              <TimeAgo timestamp={contract.timestamp} />
             </div>
           </div>
         </CardIndent>

@@ -10,7 +10,7 @@ export default function ListTransactions({ transactions, transactionStatuses, tr
     <div className="space-y-3">
       {transactions.map((tx, i) => (
         <CardIndent key={i}>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {transactionStatuses[tx.hash] === 'failed' ? (
                 <X className="w-4 h-4 text-rose-500" />
@@ -21,12 +21,11 @@ export default function ListTransactions({ transactions, transactionStatuses, tr
                 {transactionAnalysis[tx.hash]?.functionInfo?.displayName || 'Transaction'}
               </div>
             </div>
-            <TimeAgo timestamp={tx.timestamp} />
-
             <div className="text-slate-600">
               <DisplayHash hash={tx.hash} />  
             </div>
           </div>
+
           <div className="space-y-1">
             <div className="flex justify-between">
               <div className="">
@@ -55,7 +54,13 @@ export default function ListTransactions({ transactions, transactionStatuses, tr
                 }
               </span>
             </div>
+          </div>
 
+          <div className="flex items-center justify-between">
+            <div></div>
+            <div className="text-slate-600">
+              <TimeAgo timestamp={tx.timestamp} />
+            </div>
           </div>
         </CardIndent>
       ))}
