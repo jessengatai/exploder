@@ -46,7 +46,7 @@ export async function getNodeInfo(rpcUrl) {
     let forkInfo = null
     if (chainId === 1) {
       forkInfo = 'Ethereum Mainnet'
-    } else if (chainId === 8453) {
+    } else if (chainId === 8453 || chainId === 845300) {
       forkInfo = 'Base'
     } else if (chainId === 137) {
       forkInfo = 'Polygon'
